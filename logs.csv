@@ -1,0 +1,7 @@
+E001,2026-04-18 09:00,admin,Login,Admin logged in successfully,true,ADMIN
+E003,2026-04-18 09:30,user1,Warning,Memory usage critical,HIGH,Reduce open processes
+E004,2026-04-18 09:45,user2,Activity,Config file accessed,READ,/etc/sysconfig.conf
+E005,2026-04-18 10:00,user1,Login,User1 login attempt failed,false,USER
+E006,2026-04-18 10:15,system,Error,Network timeout on port 8080,503,NetworkHandler
+E007,2026-04-18 10:30,admin,Activity,Log file archived,WRITE,/var/logs/archive
+E008,2026-04-18 10:45,user2,Warning,CPU temperature elevated,MEDIUM,Check cooling system
