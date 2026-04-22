@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>System Log Analyzer — Live Dashboard</title>
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="scanline"></div>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">⬢</span>
+      <span class="brand-text">SYSTEM LOG ANALYZER</span>
+      <span class="brand-sub">// MAC.LOG · LIVE TELEMETRY</span>
+    </div>
+    <div class="clock" id="clock">00:00:00</div>
+    <div class="status">
+      <span class="dot pulse"></span>
+      <span>STREAMING</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Row 1: KPI gauges -->
+    <section class="card gauge-card"><h2>TOTAL EVENTS</h2><div id="gaugeTotal" class="chart"></div></section>
+    <section class="card gauge-card"><h2>ERROR RATE</h2><div id="gaugeError" class="chart"></div></section>
+    <section class="card gauge-card"><h2>WARNINGS</h2><div id="gaugeWarn" class="chart"></div></section>
+    <section class="card gauge-card"><h2>LOGIN EVENTS</h2><div id="gaugeLogin" class="chart"></div></section>
+
+    <!-- Row 2: map (wide) + event type bars -->
+    <section class="card wide"><h2>GLOBAL IP ACTIVITY MAP</h2><div id="map" class="chart"></div></section>
+    <section class="card"><h2>EVENT TYPE DISTRIBUTION</h2><div id="types" class="chart"></div></section>
+
+    <!-- Row 3: timeline + top processes -->
+    <section class="card wide"><h2>EVENTS OVER TIME</h2><div id="timeline" class="chart"></div></section>
+    <section class="card"><h2>TOP PROCESSES</h2><div id="procs" class="chart"></div></section>
+
+    <!-- Row 4: data table + radar -->
+    <section class="card"><h2>SEVERITY RADAR</h2><div id="radar" class="chart"></div></section>
+    <section class="card wide"><h2>LIVE EVENT STREAM</h2>
+      <div class="stream-wrap"><table id="stream"><thead>
+        <tr><th>TIME</th><th>HOST</th><th>PROCESS</th><th>TYPE</th><th>MESSAGE</th></tr>
+      </thead><tbody></tbody></table></div>
+    </section>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
