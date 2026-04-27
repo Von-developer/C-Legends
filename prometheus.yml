@@ -1,0 +1,32 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Prometheus configuration for C-Legends
+#
+#  The C++ engine exposes metrics at http://clegends-engine:9091/metrics
+#  ("clegends-engine" is the Docker Compose service name — Prometheus resolves
+#  it via the Docker bridge network automatically).
+#
+#  For local development without Docker, change the target to:
+#    localhost:9091
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  scrape_interval:     5s   # Pull metrics every 5 seconds
+  evaluation_interval: 5s
+  scrape_timeout:      4s
+
+scrape_configs:
+
+  # ── C-Legends C++ engine ─────────────────────────────────────────────────
+  - job_name: 'clegends-engine'
+    static_configs:
+      - targets: ['host.docker.internal:9091']
+    metrics_path: '/metrics'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'clegends-cpp'
+
+  # ── Prometheus self-monitoring ────────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

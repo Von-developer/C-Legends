@@ -1,0 +1,374 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "C-Legends Prometheus",
+      "description": "Point this at http://<your-host>:9091",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana",    "id": "grafana",    "name": "Grafana",    "version": "10.0.0" },
+    { "type": "panel",      "id": "geomap",     "name": "Geomap",     "version": "" },
+    { "type": "panel",      "id": "timeseries", "name": "Time series","version": "" },
+    { "type": "panel",      "id": "stat",       "name": "Stat",       "version": "" },
+    { "type": "panel",      "id": "table",      "name": "Table",      "version": "" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+
+  "annotations": { "list": [] },
+  "description": "C-Legends Log Management System — live geo map + event counters",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Overview",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color":   { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow","value": 1000  },
+              { "color": "red",   "value": 10000 }
+            ]
+          },
+          "unit": "short",
+          "custom": {
+            "fontSize": 32
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode":   "background",
+        "graphMode":   "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "textMode":    "auto",
+        "text": { "titleSize": 18, "valueSize": 36 }
+      },
+      "title": "Total Events",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr":       "clegends_total_events",
+          "legendFormat": "Events",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color":   { "mode": "palette-classic" },
+          "unit":    "short",
+          "custom": { "fontSize": 16 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode":   "value",
+        "graphMode":   "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "text": { "titleSize": 16, "valueSize": 28 }
+      },
+      "title": "Error Events",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr":       "sum(clegends_event_total{type=\"Error\"})",
+          "legendFormat": "Errors",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color":   { "mode": "palette-classic" },
+          "unit":    "short",
+          "custom": { "fontSize": 16 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode":   "value",
+        "graphMode":   "area",
+        "justifyMode": "center",
+        "text": { "titleSize": 16, "valueSize": 28 }
+      },
+      "title": "Warning Events",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr":       "sum(clegends_event_total{type=\"Warning\"})",
+          "legendFormat": "Warnings",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color":   { "mode": "palette-classic" },
+          "unit":    "short",
+          "custom": { "fontSize": 16 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode":   "value",
+        "graphMode":   "area",
+        "justifyMode": "center",
+        "text": { "titleSize": 16, "valueSize": 28 }
+      },
+      "title": "Login Events",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr":       "sum(clegends_event_total{type=\"Login\"})",
+          "legendFormat": "Logins",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "Live IP Geo Map",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "red",    "value": 5    }
+            ]
+          },
+          "custom": {
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 6 },
+      "id": 10,
+      "options": {
+        "view": {
+          "id":   "coords",
+          "lat":  20,
+          "lon":  0,
+          "zoom": 2
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug":       false,
+          "showMeasure":     false,
+          "showScale":       false,
+          "showZoom":        true
+        },
+        "layers": [
+          {
+            "type":       "basemap",
+            "name":       "Base map",
+            "config":     { "showLabels": true },
+            "opacity":    1,
+            "filterData": {}
+          },
+          {
+            "type":  "markers",
+            "name":  "IP Hits",
+            "config": {
+              "color":      { "fixed": "#F2495C" },
+              "fillOpacity": 0.6,
+              "shape":      "circle",
+              "showLegend": true,
+              "size":       { "fixed": 12, "min": 4, "max": 30 }
+            },
+            "location": {
+              "mode":   "auto",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "tooltip": true
+          }
+        ],
+        "tooltip": { "mode": "single" }
+      },
+      "pluginVersion": "10.0.0",
+      "title": "Live IP Geolocation Map",
+      "description": "Each dot = a source IP from your log stream. Red = Error, Yellow = Warning, Green = Login/Activity.",
+      "type": "geomap",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr":       "clegends_geo_hit",
+          "legendFormat": "{{city}} ({{cc}}) — {{type}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": { "mode": "rows", "keepLabels": ["lat","lon","city","cc","type"] }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": { "lat": "latitude", "lon": "longitude" }
+          }
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+      "id": 102,
+      "title": "Event Rate Over Time",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit":  "short",
+          "custom": {
+            "lineWidth":    2,
+            "fillOpacity":  12,
+            "spanNulls":    false,
+            "fontSize":     14
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 21 },
+      "id": 20,
+      "options": {
+        "legend": {
+          "calcs":       ["mean","max","last"],
+          "displayMode": "table",
+          "placement":   "bottom",
+          "showLegend":  true,
+          "textSize":    14
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Events by Type (rate)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr":       "clegends_event_total",
+          "legendFormat": "{{type}} / {{cc}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color":    { "mode": "palette-classic" },
+          "unit":     "short",
+          "custom":   { "fontSize": 14 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 21 },
+      "id": 21,
+      "options": {
+        "frameIndex": 0,
+        "showHeader": true,
+        "fontSize":   14,
+        "cellHeight": "sm",
+        "footer": {
+          "show":          false,
+          "reducer":       ["sum"],
+          "countRows":     false,
+          "fields":        ""
+        },
+        "sortBy": [{ "desc": true, "displayName": "Value" }]
+      },
+      "title": "Top Source Countries",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr":       "sort_desc(sum by (cc, city) (clegends_event_total))",
+          "legendFormat": "{{cc}} / {{city}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        { "id": "labelsToFields", "options": { "mode": "rows" } }
+      ]
+    }
+
+  ],
+
+  "refresh":        "15s",
+  "schemaVersion":  38,
+  "style":          "dark",
+  "tags":           ["c-legends","log-management","geo","prometheus"],
+  "templating":     { "list": [] },
+  "time":           { "from": "now-1h", "to": "now" },
+  "timepicker":     {},
+  "timezone":       "browser",
+  "title":          "C-Legends — Live Log Analysis",
+  "uid":            "clegends-v2",
+  "version":        2,
+  "weekStart":      ""
+}

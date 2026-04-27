@@ -117281,3 +117281,18 @@ Jul  8 08:52:05 calvisitor-10-105-162-124 kernel[0]: PM response took 1999 ms (5
 Jul  8 08:52:05 calvisitor-10-105-162-124 kernel[0]: ARPT: 790708.368498: AirPort_Brcm43xx::powerChange: System Sleep 
 Jul  8 08:52:05 calvisitor-10-105-162-124 kernel[0]: ARPT: 790708.368522: IOPMPowerSource Information: onSleep,  SleepType: Normal Sleep,  'ExternalConnected': No, 'TimeRemaining': 15462, 
 Jul  8 08:52:05 calvisitor-10-105-162-124 kernel[0]: AppleCamIn::systemWakeCall - messageType = 0xE0000340
+Apr 26 12:00:01 authorMacBook-Pro kernel[0]: ARPT: connection attempt from 108.177.98.108 port 443
+Apr 26 12:00:02 authorMacBook-Pro kernel[0]: ARPT: connection attempt from 17.249.28.78 port 443
+Apr 26 12:00:03 authorMacBook-Pro kernel[0]: ARPT: TLS error from 103.251.128.144: certificate expired
+Apr 26 12:00:04 authorMacBook-Pro kernel[0]: ARPT: connection attempt from 111.206.25.143 port 80
+Apr 26 12:00:05 authorMacBook-Pro kernel[0]: ARPT: Auth failed login from 119.81.102.227 port 22
+Apr 26 12:00:06 authorMacBook-Pro kernel[0]: ARPT: connection attempt from 123.125.50.30 port 443
+Apr 26 12:00:07 authorMacBook-Pro kernel[0]: ARPT: Sandbox deny network-outbound 52.202.31.87
+Apr 26 12:00:08 authorMacBook-Pro kernel[0]: ARPT: Sandbox deny network-outbound 34.117.188.166
+Apr 26 12:00:09 authorMacBook-Pro kernel[0]: ARPT: Auth failed login from 185.220.101.45 port 22
+Apr 26 12:00:10 authorMacBook-Pro kernel[0]: ARPT: connection attempt from 91.108.4.167 port 443
+Apr 26 12:00:11 authorMacBook-Pro kernel[0]: ARPT: Wake reason: wake from 203.119.149.28
+Apr 26 12:00:12 authorMacBook-Pro kernel[0]: ARPT: connection attempt from 151.101.65.140 port 443
+Apr 26 12:00:13 authorMacBook-Pro kernel[0]: ARPT: TLS error from 216.58.214.46: timeout
+Apr 26 12:00:14 authorMacBook-Pro kernel[0]: ARPT: Auth failed login from 45.33.32.156 port 22
+Apr 26 12:00:15 authorMacBook-Pro kernel[0]: ARPT: connection attempt from 77.88.55.60 port 443

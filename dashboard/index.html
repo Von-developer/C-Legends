@@ -1,52 +1,847 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>System Log Analyzer — Live Dashboard</title>
-<link rel="stylesheet" href="css/style.css" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>C-Legends · Log Intelligence</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Root ────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:       #0d0e14;
+  --surface:  #13151f;
+  --surface2: #1a1d2e;
+  --surface3: #222540;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #e2e8f0;
+  --muted:    #64748b;
+  --accent:   #6366f1;       /* indigo */
+  --accent2:  #8b5cf6;       /* violet */
+  --red:      #ef4444;
+  --amber:    #f59e0b;
+  --green:    #22c55e;
+  --blue:     #3b82f6;
+  --cyan:     #06b6d4;
+  --pink:     #ec4899;
+}
+
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  font-size:13px;
+  line-height:1.5;
+}
+
+/* ── Topbar ──────────────────────────────────────────────────────── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  height:52px;padding:0 20px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  gap:16px;
+  flex-shrink:0;
+}
+.logo{
+  display:flex;align-items:center;gap:10px;
+  font-weight:700;font-size:15px;letter-spacing:-0.02em;
+  color:#fff;white-space:nowrap;
+}
+.logo-icon{
+  width:28px;height:28px;border-radius:6px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;
+}
+.logo span{color:var(--muted);font-weight:400;font-size:12px;margin-left:4px}
+
+.search-bar{
+  flex:1;max-width:520px;
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface2);
+  border:1px solid var(--border2);
+  border-radius:6px;
+  padding:0 12px;height:34px;
+  font-size:12px;color:var(--muted);
+  font-family:'JetBrains Mono',monospace;
+}
+.search-bar input{
+  background:none;border:none;outline:none;color:var(--text);
+  font-family:inherit;font-size:12px;width:100%;
+}
+.search-bar .pipe{color:var(--accent);margin:0 4px}
+
+.topbar-right{display:flex;align-items:center;gap:16px}
+.time-range{
+  display:flex;align-items:center;gap:6px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:5px;padding:5px 10px;font-size:12px;
+  cursor:pointer;color:var(--text);
+}
+.time-range .dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 6px var(--green);animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+.live-clock{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)}
+.refresh-btn{
+  background:var(--accent);color:#fff;border:none;border-radius:5px;
+  padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;
+  transition:background 0.15s;
+}
+.refresh-btn:hover{background:var(--accent2)}
+
+/* ── Layout ──────────────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;height:100vh}
+.content{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+
+/* ── Row helpers ─────────────────────────────────────────────────── */
+.row{display:flex;gap:12px;flex-shrink:0}
+.row.kpi-row{height:88px}
+.row.main-row{flex:1;min-height:0}
+.row.bottom-row{height:260px;flex-shrink:0}
+
+/* ── KPI Cards ───────────────────────────────────────────────────── */
+.kpi{
+  flex:1;background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:14px 16px;
+  display:flex;flex-direction:column;justify-content:space-between;
+  position:relative;overflow:hidden;
+}
+.kpi::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--kpi-color,var(--accent));
+}
+.kpi-label{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase}
+.kpi-bottom{display:flex;align-items:flex-end;justify-content:space-between}
+.kpi-val{font-size:28px;font-weight:700;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+.kpi-delta{font-size:11px;font-weight:500;padding:2px 6px;border-radius:3px}
+.kpi-delta.up{background:rgba(34,197,94,0.15);color:var(--green)}
+.kpi-delta.dn{background:rgba(239,68,68,0.15);color:var(--red)}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.kpi-spark{width:60px;height:30px}
+
+/* ── Panel ───────────────────────────────────────────────────────── */
+.panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:14px;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:10px;flex-shrink:0;
+}
+.panel-title{font-size:12px;font-weight:600;color:var(--text);letter-spacing:0.02em}
+.panel-badge{
+  font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;
+  background:rgba(99,102,241,0.15);color:var(--accent);border:1px solid rgba(99,102,241,0.3);
+}
+.panel-body{flex:1;min-height:0;position:relative}
+.chart-wrap{width:100%;height:100%}
+
+/* ── Event Table ─────────────────────────────────────────────────── */
+.evt-table-wrap{flex:1;overflow:auto;min-height:0}
+.evt-table{width:100%;border-collapse:collapse;font-size:11px}
+.evt-table th{
+  position:sticky;top:0;z-index:2;
+  background:var(--surface2);padding:7px 10px;
+  text-align:left;font-size:10px;font-weight:600;
+  color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;
+  border-bottom:1px solid var(--border2);white-space:nowrap;
+}
+.evt-table td{
+  padding:6px 10px;border-bottom:1px solid var(--border);
+  color:var(--text);font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.evt-table tr:hover td{background:var(--surface2)}
+.evt-table td.mono{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+.evt-table td.msg{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;color:#94a3b8;
+}
+.badge{
+  display:inline-block;padding:2px 7px;border-radius:3px;
+  font-size:10px;font-weight:600;letter-spacing:0.05em;
+}
+.badge-error   {background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.35)}
+.badge-warning {background:rgba(245,158,11,0.15);color:#fcd34d;border:1px solid rgba(245,158,11,0.35)}
+.badge-login   {background:rgba(34,197,94,0.12);color:#86efac;border:1px solid rgba(34,197,94,0.3)}
+.badge-activity{background:rgba(99,102,241,0.12);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3)}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px}
+
+/* ── Splunk search result bar ────────────────────────────────────── */
+.result-bar{
+  display:flex;align-items:center;gap:12px;
+  padding:8px 14px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:6px;
+  font-size:11px;flex-shrink:0;
+}
+.result-bar .count{color:#fff;font-weight:700;font-family:'JetBrains Mono',monospace}
+.result-bar .label{color:var(--muted)}
+.result-bar .sep{color:var(--border2)}
+.progress-bg{flex:1;height:4px;background:var(--surface3);border-radius:2px;max-width:200px}
+.progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+
+/* ── Field sidebar ───────────────────────────────────────────────── */
+.field-pill{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 10px;border-radius:4px;cursor:pointer;
+  transition:background 0.1s;
+}
+.field-pill:hover{background:var(--surface3)}
+.field-name{font-size:11px;color:var(--text);font-family:'JetBrains Mono',monospace}
+.field-count{font-size:10px;color:var(--muted)}
+.field-bar-bg{height:3px;background:var(--surface3);border-radius:2px;margin-top:2px}
+.field-bar-fill{height:100%;border-radius:2px;background:var(--accent)}
+
+/* ── Tab strip ───────────────────────────────────────────────────── */
+.tabs{display:flex;gap:2px;margin-bottom:10px;flex-shrink:0}
+.tab{
+  padding:4px 12px;border-radius:4px;font-size:11px;font-weight:500;
+  cursor:pointer;color:var(--muted);transition:all 0.15s;
+}
+.tab.active{background:rgba(99,102,241,0.15);color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+</style>
 </head>
 <body>
-  <div class="scanline"></div>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">⬢</span>
-      <span class="brand-text">SYSTEM LOG ANALYZER</span>
-      <span class="brand-sub">// MAC.LOG · LIVE TELEMETRY</span>
+<div class="app">
+
+<!-- ── Topbar ──────────────────────────────────────────────────── -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    C-LEGENDS <span>/ Log Intelligence Platform</span>
+  </div>
+
+  <div class="search-bar">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="#64748b" stroke-width="1.5"/><path d="m10.5 10.5 3.5 3.5" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <input id="searchInput" value='index=main sourcetype=mac_log' spellcheck="false"/>
+    <span class="pipe">|</span>
+    <span style="color:#94a3b8;font-size:11px" id="searchHint">stats count by type</span>
+  </div>
+
+  <div class="topbar-right">
+    <div class="time-range">
+      <span class="dot"></span>
+      <span id="dateRange">Jul 1 – Jul 8, 2024</span>
     </div>
-    <div class="clock" id="clock">00:00:00</div>
-    <div class="status">
-      <span class="dot pulse"></span>
-      <span>STREAMING</span>
+    <div class="live-clock" id="clock">--:--:--</div>
+    <button class="refresh-btn" onclick="refreshData()">▶ Search</button>
+  </div>
+</div>
+
+<!-- ── Content ────────────────────────────────────────────────── -->
+<div class="content">
+
+  <!-- Result bar (Splunk-style) -->
+  <div class="result-bar">
+    <span class="count" id="totalCount">117,283</span>
+    <span class="label">events matched</span>
+    <span class="sep">|</span>
+    <span class="label">Scan complete in</span>
+    <span class="count">0.34s</span>
+    <span class="sep">|</span>
+    <span class="label">Showing Jul 1 – Jul 8</span>
+    <div class="progress-bg" style="margin-left:auto">
+      <div class="progress-fill" style="width:78%"></div>
     </div>
-  </header>
+    <span class="label">8 days of data</span>
+  </div>
 
-  <main class="grid">
-    <!-- Row 1: KPI gauges -->
-    <section class="card gauge-card"><h2>TOTAL EVENTS</h2><div id="gaugeTotal" class="chart"></div></section>
-    <section class="card gauge-card"><h2>ERROR RATE</h2><div id="gaugeError" class="chart"></div></section>
-    <section class="card gauge-card"><h2>WARNINGS</h2><div id="gaugeWarn" class="chart"></div></section>
-    <section class="card gauge-card"><h2>LOGIN EVENTS</h2><div id="gaugeLogin" class="chart"></div></section>
+  <!-- KPI Row -->
+  <div class="row kpi-row">
+    <div class="kpi" style="--kpi-color:#6366f1">
+      <div class="kpi-label">Total Events</div>
+      <div class="kpi-bottom">
+        <div>
+          <div class="kpi-val" id="kpiTotal">117,283</div>
+          <div class="kpi-sub">Across all sources</div>
+        </div>
+        <canvas class="kpi-spark" id="sparkTotal"></canvas>
+      </div>
+    </div>
+    <div class="kpi" style="--kpi-color:#ef4444">
+      <div class="kpi-label">Errors</div>
+      <div class="kpi-bottom">
+        <div>
+          <div class="kpi-val" id="kpiErrors">12,231</div>
+          <div class="kpi-sub" id="errPct">10.4% of total</div>
+        </div>
+        <span class="kpi-delta dn">▲ HIGH</span>
+      </div>
+    </div>
+    <div class="kpi" style="--kpi-color:#f59e0b">
+      <div class="kpi-label">Warnings</div>
+      <div class="kpi-bottom">
+        <div>
+          <div class="kpi-val" id="kpiWarn">129</div>
+          <div class="kpi-sub">0.1% of total</div>
+        </div>
+        <span class="kpi-delta up">▼ LOW</span>
+      </div>
+    </div>
+    <div class="kpi" style="--kpi-color:#22c55e">
+      <div class="kpi-label">Login Events</div>
+      <div class="kpi-bottom">
+        <div>
+          <div class="kpi-val" id="kpiLogins">32,118</div>
+          <div class="kpi-sub">27.4% of total</div>
+        </div>
+        <span class="kpi-delta up">▲ NORM</span>
+      </div>
+    </div>
+    <div class="kpi" style="--kpi-color:#06b6d4">
+      <div class="kpi-label">Activity Events</div>
+      <div class="kpi-bottom">
+        <div>
+          <div class="kpi-val" id="kpiActivity">72,805</div>
+          <div class="kpi-sub">62.1% of total</div>
+        </div>
+        <span class="kpi-delta up">▼ NORM</span>
+      </div>
+    </div>
+    <div class="kpi" style="--kpi-color:#ec4899">
+      <div class="kpi-label">Unique Hosts</div>
+      <div class="kpi-bottom">
+        <div>
+          <div class="kpi-val">2</div>
+          <div class="kpi-sub">Active endpoints</div>
+        </div>
+        <span class="kpi-delta up">● ONLINE</span>
+      </div>
+    </div>
+  </div>
 
-    <!-- Row 2: map (wide) + event type bars -->
-    <section class="card wide"><h2>GLOBAL IP ACTIVITY MAP</h2><div id="map" class="chart"></div></section>
-    <section class="card"><h2>EVENT TYPE DISTRIBUTION</h2><div id="types" class="chart"></div></section>
+  <!-- Main row: timeline + donut + field summary -->
+  <div class="row main-row">
+    <!-- Timeline (wide) -->
+    <div class="panel" style="flex:3">
+      <div class="panel-header">
+        <span class="panel-title">Event Volume Over Time</span>
+        <div style="display:flex;gap:6px">
+          <div class="tabs" style="margin:0">
+            <div class="tab active" onclick="switchTimeline('stack',this)">Stacked</div>
+            <div class="tab" onclick="switchTimeline('line',this)">Lines</div>
+          </div>
+          <span class="panel-badge">Jul 1–8</span>
+        </div>
+      </div>
+      <div class="panel-body"><div class="chart-wrap" id="chartTimeline"></div></div>
+    </div>
 
-    <!-- Row 3: timeline + top processes -->
-    <section class="card wide"><h2>EVENTS OVER TIME</h2><div id="timeline" class="chart"></div></section>
-    <section class="card"><h2>TOP PROCESSES</h2><div id="procs" class="chart"></div></section>
+    <!-- Donut -->
+    <div class="panel" style="flex:1;min-width:200px">
+      <div class="panel-header">
+        <span class="panel-title">Event Type Split</span>
+        <span class="panel-badge">Pie</span>
+      </div>
+      <div class="panel-body"><div class="chart-wrap" id="chartDonut"></div></div>
+    </div>
 
-    <!-- Row 4: data table + radar -->
-    <section class="card"><h2>SEVERITY RADAR</h2><div id="radar" class="chart"></div></section>
-    <section class="card wide"><h2>LIVE EVENT STREAM</h2>
-      <div class="stream-wrap"><table id="stream"><thead>
-        <tr><th>TIME</th><th>HOST</th><th>PROCESS</th><th>TYPE</th><th>MESSAGE</th></tr>
-      </thead><tbody></tbody></table></div>
-    </section>
-  </main>
+    <!-- Field summary (Splunk sidebar style) -->
+    <div class="panel" style="flex:1;min-width:200px">
+      <div class="panel-header">
+        <span class="panel-title">Top Processes</span>
+        <span class="panel-badge">by count</span>
+      </div>
+      <div class="panel-body" style="overflow:auto">
+        <div id="fieldList"></div>
+      </div>
+    </div>
+  </div>
 
-  <script src="js/data.js"></script>
-  <script src="js/dashboard.js"></script>
+  <!-- Bottom row: severity heatmap + bar chart + event table -->
+  <div class="row bottom-row">
+    <!-- Hourly heatmap-style bar -->
+    <div class="panel" style="flex:1;min-width:220px">
+      <div class="panel-header">
+        <span class="panel-title">Severity Breakdown</span>
+      </div>
+      <div class="panel-body"><div class="chart-wrap" id="chartSeverity"></div></div>
+    </div>
+
+    <!-- Horizontal process bar -->
+    <div class="panel" style="flex:1;min-width:220px">
+      <div class="panel-header">
+        <span class="panel-title">Daily Error Trend</span>
+      </div>
+      <div class="panel-body"><div class="chart-wrap" id="chartErrorTrend"></div></div>
+    </div>
+
+    <!-- Live event table -->
+    <div class="panel" style="flex:3">
+      <div class="panel-header">
+        <span class="panel-title">Live Event Stream</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:10px;color:var(--muted)" id="streamCount">Showing latest 50</span>
+          <span class="panel-badge" id="streamBadge">● LIVE</span>
+        </div>
+      </div>
+      <div class="evt-table-wrap">
+        <table class="evt-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Host</th>
+              <th>Process</th>
+              <th>Type</th>
+              <th>Message</th>
+              <th>Extra</th>
+            </tr>
+          </thead>
+          <tbody id="streamBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  DATA  (real stats extracted from Mac_exported.csv + data.js)
+// ═══════════════════════════════════════════════════════════════════
+const DATA = {
+  totals: { events: 117283, errors: 12231, warnings: 129, logins: 32118, activities: 72805 },
+
+  timeline: [
+    { day:"Jul 1", total:11617, error:1410, warn:12,  login:3220,  activity:6975  },
+    { day:"Jul 2", total:8040,  error:890,  warn:8,   login:2180,  activity:4962  },
+    { day:"Jul 3", total:19107, error:2010, warn:22,  login:5230,  activity:11845 },
+    { day:"Jul 4", total:21809, error:2380, warn:30,  login:6040,  activity:13359 },
+    { day:"Jul 5", total:13296, error:1540, warn:17,  login:3580,  activity:8159  },
+    { day:"Jul 6", total:12321, error:1290, warn:14,  login:3410,  activity:7607  },
+    { day:"Jul 7", total:15970, error:1830, warn:18,  login:4480,  activity:9642  },
+    { day:"Jul 8", total:4985,  error:550,  warn:5,   login:1380,  activity:3050  }
+  ],
+
+  processes: [
+    { name:"kernel",            count:41181 },
+    { name:"corecaptured",      count:8585  },
+    { name:"com.apple.cts",     count:7743  },
+    { name:"last",              count:4377  },
+    { name:"Microsoft",         count:4117  },
+    { name:"WebKit.WebContent", count:3417  },
+    { name:"QQ",                count:3229  },
+    { name:"AddressBookBridge", count:3177  },
+    { name:"WindowServer",      count:2294  },
+    { name:"locationd",         count:2233  }
+  ],
+
+  stream: [
+    ["Jul 1 09:00:55","calvisitor-10-105-160-95","kernel","Login","Wake reason: ?","true"],
+    ["Jul 1 09:00:55","calvisitor-10-105-160-95","kernel","Login","AppleThunderboltNHIType2::prePCIWake - power up complete","true"],
+    ["Jul 1 09:00:55","calvisitor-10-105-160-95","kernel","Activity","AirPort: Link Down on awdl0. Reason 1 (Unspecified).","SYSTEM"],
+    ["Jul 1 09:01:02","calvisitor-10-105-160-95","Microsoft","Activity","sync request issued to azure endpoint","SYSTEM"],
+    ["Jul 1 09:01:05","calvisitor-10-105-162-178","QQ","Activity","keepalive → 119.147.45.60","SYSTEM"],
+    ["Jul 1 09:01:10","calvisitor-10-105-160-95","corecaptured","Error","capture failed: code 503","503"],
+    ["Jul 1 09:01:14","calvisitor-10-105-162-178","locationd","Warning","location accuracy degraded — low signal","LOW"],
+    ["Jul 1 09:01:18","calvisitor-10-105-160-95","WindowServer","Activity","display 1 configured successfully","SYSTEM"],
+    ["Jul 1 09:01:22","calvisitor-10-105-160-95","Safari","Activity","loaded https://apple.com","READ"],
+    ["Jul 1 09:01:27","calvisitor-10-105-160-95","com.apple.cts","Error","scheduler denied: throttled by sandbox","0"],
+    ["Jul 1 09:01:31","calvisitor-10-105-160-95","sandboxd","Activity","deny file-read-data /etc/passwd","DENY"],
+    ["Jul 1 09:01:35","calvisitor-10-105-160-95","kernel","Warning","memory pressure critical — purging caches","HIGH"],
+    ["Jul 1 09:01:39","calvisitor-10-105-162-178","networkd","Activity","route added via 10.105.160.1","SYSTEM"],
+    ["Jul 1 09:01:43","calvisitor-10-105-160-95","sharingd","Login","peer auth succeeded","true"],
+    ["Jul 1 09:01:47","calvisitor-10-105-160-95","loginwindow","Login","user session opened","true"],
+    ["Jul 1 09:01:52","calvisitor-10-105-160-95","kernel","Error","AppleCamIn fault 0xE0000340","0"],
+    ["Jul 1 09:02:01","calvisitor-10-105-160-95","AddressBookBridge","Activity","contact sync requested","READ"],
+    ["Jul 1 09:02:08","calvisitor-10-105-160-95","corecaptured","Error","IOPMrootDomain: system wake: ClamshellOpened","0"],
+    ["Jul 1 09:02:15","calvisitor-10-105-162-178","kernel","Activity","Bluetooth -- LE is supported","SYSTEM"],
+    ["Jul 1 09:02:22","calvisitor-10-105-160-95","last","Login","reboot logged","true"]
+  ]
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════════════════════
+const clockEl = document.getElementById('clock');
+function tick(){
+  const d=new Date();
+  clockEl.textContent=d.toTimeString().slice(0,8);
+}
+setInterval(tick,1000);tick();
+
+// ═══════════════════════════════════════════════════════════════════
+//  THEME COLORS
+// ═══════════════════════════════════════════════════════════════════
+const C={
+  accent:'#6366f1', accent2:'#8b5cf6',
+  red:'#ef4444', amber:'#f59e0b', green:'#22c55e',
+  blue:'#3b82f6', cyan:'#06b6d4',
+  text:'#e2e8f0', muted:'#64748b',
+  grid:'rgba(255,255,255,0.05)',
+  surface:'#13151f', surface2:'#1a1d2e'
+};
+
+const axisBase = {
+  axisLine:{lineStyle:{color:'rgba(255,255,255,0.1)'}},
+  axisLabel:{color:C.muted,fontFamily:'Inter, sans-serif',fontSize:11},
+  splitLine:{lineStyle:{color:C.grid}},
+  axisTick:{show:false}
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  TIMELINE CHART
+// ═══════════════════════════════════════════════════════════════════
+let timelineChart, timelineMode='stack';
+
+function buildTimelineOption(mode){
+  const days  = DATA.timeline.map(t=>t.day);
+  const err   = DATA.timeline.map(t=>t.error);
+  const warn  = DATA.timeline.map(t=>t.warn);
+  const login = DATA.timeline.map(t=>t.login);
+  const act   = DATA.timeline.map(t=>t.activity);
+
+  const stack = mode==='stack' ? 'events' : undefined;
+  const area  = mode==='stack';
+
+  const mkSeries=(name,data,color)=>({
+    name,type:'bar',stack,
+    data,
+    itemStyle:{color,borderRadius:mode==='stack'?[0,0,0,0]:[3,3,0,0]},
+    emphasis:{focus:'series'},
+    ...(area?{}:{})
+  });
+
+  if(mode==='line'){
+    return {
+      backgroundColor:'transparent',
+      grid:{top:36,right:12,bottom:36,left:48},
+      tooltip:{trigger:'axis',backgroundColor:'#1a1d2e',borderColor:'rgba(255,255,255,0.1)',
+               textStyle:{color:C.text,fontSize:11},axisPointer:{lineStyle:{color:'rgba(255,255,255,0.15)'}}},
+      legend:{data:['Activity','Login','Error','Warning'],top:4,right:4,
+              textStyle:{color:C.muted,fontSize:11},icon:'circle',itemWidth:8},
+      xAxis:{type:'category',data:days,boundaryGap:true,...axisBase},
+      yAxis:{type:'value',...axisBase},
+      series:[
+        {name:'Activity',type:'line',smooth:true,data:act,
+         itemStyle:{color:C.accent},lineStyle:{width:2,color:C.accent},
+         areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,
+           colorStops:[{offset:0,color:'rgba(99,102,241,0.3)'},{offset:1,color:'rgba(99,102,241,0)'}]}}},
+        {name:'Login',type:'line',smooth:true,data:login,
+         itemStyle:{color:C.green},lineStyle:{width:2,color:C.green}},
+        {name:'Error',type:'line',smooth:true,data:err,
+         itemStyle:{color:C.red},lineStyle:{width:2,color:C.red},
+         areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,
+           colorStops:[{offset:0,color:'rgba(239,68,68,0.25)'},{offset:1,color:'rgba(239,68,68,0)'}]}}},
+        {name:'Warning',type:'line',smooth:true,data:warn,
+         itemStyle:{color:C.amber},lineStyle:{width:2,color:C.amber}}
+      ]
+    };
+  }
+
+  return {
+    backgroundColor:'transparent',
+    grid:{top:36,right:12,bottom:36,left:52},
+    tooltip:{trigger:'axis',backgroundColor:'#1a1d2e',borderColor:'rgba(255,255,255,0.1)',
+             textStyle:{color:C.text,fontSize:11},axisPointer:{type:'shadow'}},
+    legend:{data:['Activity','Login','Error','Warning'],top:4,right:4,
+            textStyle:{color:C.muted,fontSize:11},icon:'circle',itemWidth:8},
+    xAxis:{type:'category',data:days,...axisBase},
+    yAxis:{type:'value',...axisBase},
+    series:[
+      mkSeries('Activity',act,C.accent),
+      mkSeries('Login',login,C.green),
+      mkSeries('Error',err,C.red),
+      mkSeries('Warning',warn,C.amber)
+    ]
+  };
+}
+
+function switchTimeline(mode,el){
+  timelineMode=mode;
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  timelineChart.setOption(buildTimelineOption(mode),true);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DONUT CHART
+// ═══════════════════════════════════════════════════════════════════
+let donutChart;
+function buildDonut(){
+  const t=DATA.totals;
+  donutChart=echarts.init(document.getElementById('chartDonut'));
+  donutChart.setOption({
+    backgroundColor:'transparent',
+    tooltip:{trigger:'item',backgroundColor:'#1a1d2e',borderColor:'rgba(255,255,255,0.1)',
+             textStyle:{color:C.text,fontSize:11},
+             formatter:'{b}<br/>{c} <span style="color:#64748b">({d}%)</span>'},
+    legend:{show:false},
+    series:[{
+      type:'pie',
+      radius:['50%','75%'],
+      center:['50%','52%'],
+      avoidLabelOverlap:false,
+      itemStyle:{borderColor:'#13151f',borderWidth:2},
+      label:{
+        show:true,
+        position:'center',
+        formatter:()=>`{total|${(t.events/1000).toFixed(0)}K}\n{sub|events}`,
+        rich:{
+          total:{fontSize:22,fontWeight:700,color:'#fff',lineHeight:28},
+          sub:{fontSize:11,color:C.muted}
+        }
+      },
+      emphasis:{label:{show:true}},
+      data:[
+        {value:t.activities,name:'Activity',itemStyle:{color:C.accent}},
+        {value:t.logins,    name:'Login',   itemStyle:{color:C.green}},
+        {value:t.errors,    name:'Error',   itemStyle:{color:C.red}},
+        {value:t.warnings,  name:'Warning', itemStyle:{color:C.amber}}
+      ]
+    }]
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FIELD LIST (Splunk-style sidebar)
+// ═══════════════════════════════════════════════════════════════════
+function buildFieldList(){
+  const max=DATA.processes[0].count;
+  const list=document.getElementById('fieldList');
+  list.innerHTML=DATA.processes.map(p=>{
+    const pct=Math.round((p.count/max)*100);
+    const display=p.count>=1000?(p.count/1000).toFixed(1)+'k':p.count;
+    return `
+      <div class="field-pill">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <span class="field-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px">${p.name}</span>
+            <span class="field-count">${display}</span>
+          </div>
+          <div class="field-bar-bg"><div class="field-bar-fill" style="width:${pct}%"></div></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SEVERITY CHART
+// ═══════════════════════════════════════════════════════════════════
+let severityChart;
+function buildSeverity(){
+  severityChart=echarts.init(document.getElementById('chartSeverity'));
+  const t=DATA.totals;
+  severityChart.setOption({
+    backgroundColor:'transparent',
+    tooltip:{trigger:'item',backgroundColor:'#1a1d2e',borderColor:'rgba(255,255,255,0.1)',
+             textStyle:{color:C.text,fontSize:11}},
+    grid:{top:10,right:60,bottom:10,left:10,containLabel:true},
+    xAxis:{show:false},
+    yAxis:{
+      type:'category',
+      data:['Activity','Login','Error','Warning'],
+      axisLine:{show:false},axisTick:{show:false},
+      axisLabel:{color:C.muted,fontSize:11,fontFamily:'Inter'}
+    },
+    series:[{
+      type:'bar',
+      barWidth:14,
+      data:[
+        {value:t.activities,itemStyle:{color:C.accent,borderRadius:[0,3,3,0]}},
+        {value:t.logins,    itemStyle:{color:C.green, borderRadius:[0,3,3,0]}},
+        {value:t.errors,    itemStyle:{color:C.red,   borderRadius:[0,3,3,0]}},
+        {value:t.warnings,  itemStyle:{color:C.amber, borderRadius:[0,3,3,0]}}
+      ],
+      label:{show:true,position:'right',color:C.muted,fontSize:10,
+             fontFamily:'JetBrains Mono,monospace',
+             formatter:p=>(p.value/1000).toFixed(1)+'k'}
+    }]
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ERROR TREND
+// ═══════════════════════════════════════════════════════════════════
+let errorChart;
+function buildErrorTrend(){
+  errorChart=echarts.init(document.getElementById('chartErrorTrend'));
+  errorChart.setOption({
+    backgroundColor:'transparent',
+    grid:{top:10,right:16,bottom:28,left:16,containLabel:true},
+    tooltip:{trigger:'axis',backgroundColor:'#1a1d2e',borderColor:'rgba(255,255,255,0.1)',
+             textStyle:{color:C.text,fontSize:11}},
+    xAxis:{type:'category',data:DATA.timeline.map(t=>t.day),...axisBase,
+           axisLabel:{...axisBase.axisLabel,fontSize:10}},
+    yAxis:{type:'value',...axisBase},
+    series:[
+      {
+        type:'bar',
+        data:DATA.timeline.map(t=>t.error),
+        barWidth:'55%',
+        itemStyle:{
+          borderRadius:[3,3,0,0],
+          color:{type:'linear',x:0,y:0,x2:0,y2:1,
+            colorStops:[{offset:0,color:'rgba(239,68,68,0.9)'},{offset:1,color:'rgba(239,68,68,0.3)'}]}
+        },
+        emphasis:{itemStyle:{color:C.red}}
+      },
+      {
+        type:'line',smooth:true,
+        data:DATA.timeline.map(t=>t.error),
+        itemStyle:{color:C.red},
+        lineStyle:{width:2,color:C.red},
+        symbol:'none'
+      }
+    ]
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  STREAM TABLE
+// ═══════════════════════════════════════════════════════════════════
+const badgeClass={
+  Login:'badge-login',Error:'badge-error',Warning:'badge-warning',Activity:'badge-activity'
+};
+
+let streamIdx=0;
+function addStreamRow(){
+  const d=DATA.stream[streamIdx%DATA.stream.length];
+  streamIdx++;
+  const [time,host,proc,type,msg,extra]=d;
+  const tbody=document.getElementById('streamBody');
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+    <td class="mono">${time}</td>
+    <td style="color:#94a3b8;font-size:11px;font-family:'JetBrains Mono',monospace;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${host}</td>
+    <td style="color:var(--text);font-size:11px">${proc}</td>
+    <td><span class="badge ${badgeClass[type]||'badge-activity'}">${type}</span></td>
+    <td class="msg">${msg}</td>
+    <td class="mono" style="max-width:80px;overflow:hidden;text-overflow:ellipsis">${extra}</td>
+  `;
+  tr.style.animation='none';
+  tr.style.opacity='0';
+  tr.style.transform='translateY(-4px)';
+  tbody.insertBefore(tr,tbody.firstChild);
+  requestAnimationFrame(()=>{
+    tr.style.transition='opacity 0.25s ease, transform 0.25s ease';
+    tr.style.opacity='1';
+    tr.style.transform='none';
+  });
+  while(tbody.children.length>50) tbody.removeChild(tbody.lastChild);
+}
+
+// seed immediately
+for(let i=0;i<18;i++) addStreamRow();
+// simulate live stream
+setInterval(addStreamRow,2200);
+
+// ═══════════════════════════════════════════════════════════════════
+//  SPARKLINES (mini canvas charts in KPI cards)
+// ═══════════════════════════════════════════════════════════════════
+function drawSpark(canvasId,data,color){
+  const el=document.getElementById(canvasId);
+  if(!el) return;
+  const ctx=el.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  el.width=60*dpr; el.height=30*dpr;
+  el.style.width='60px'; el.style.height='30px';
+  ctx.scale(dpr,dpr);
+  const min=Math.min(...data), max=Math.max(...data), range=max-min||1;
+  const pts=data.map((v,i)=>[(i/(data.length-1))*58+1,(1-(v-min)/range)*26+2]);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.stroke();
+  // fill
+  ctx.lineTo(pts[pts.length-1][0],30);
+  ctx.lineTo(pts[0][0],30);
+  ctx.closePath();
+  const grad=ctx.createLinearGradient(0,0,0,30);
+  grad.addColorStop(0,color.replace(')',',0.3)').replace('rgb','rgba'));
+  grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grad; ctx.fill();
+}
+
+function hexAlpha(hex,a){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function drawSparkHex(id,data,color){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const ctx=el.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  el.width=60*dpr; el.height=30*dpr;
+  el.style.width='60px'; el.style.height='30px';
+  ctx.scale(dpr,dpr);
+  const min=Math.min(...data), max=Math.max(...data), range=max-min||1;
+  const pts=data.map((v,i)=>[(i/(data.length-1))*56+2,(1-(v-min)/range)*24+3]);
+  const grad=ctx.createLinearGradient(0,0,0,30);
+  grad.addColorStop(0,hexAlpha(color,0.3));
+  grad.addColorStop(1,hexAlpha(color,0));
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++){
+    const mx=(pts[i-1][0]+pts[i][0])/2;
+    ctx.bezierCurveTo(mx,pts[i-1][1],mx,pts[i][1],pts[i][0],pts[i][1]);
+  }
+  ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.stroke();
+  ctx.lineTo(pts[pts.length-1][0],30);
+  ctx.lineTo(pts[0][0],30);
+  ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
+function init(){
+  // Timeline
+  timelineChart=echarts.init(document.getElementById('chartTimeline'));
+  timelineChart.setOption(buildTimelineOption('stack'));
+
+  // Donut
+  buildDonut();
+
+  // Field list
+  buildFieldList();
+
+  // Severity
+  buildSeverity();
+
+  // Error trend
+  buildErrorTrend();
+
+  // Sparkline
+  drawSparkHex('sparkTotal', DATA.timeline.map(t=>t.total), '#6366f1');
+
+  // Resize
+  window.addEventListener('resize',()=>{
+    [timelineChart,donutChart,severityChart,errorChart].forEach(c=>c&&c.resize());
+  });
+}
+
+// Simulated live gauge updates
+setInterval(()=>{
+  const bump=(v,f=0.003)=>v+Math.round((Math.random()-0.5)*v*f);
+  DATA.totals.events=bump(DATA.totals.events);
+  document.getElementById('kpiTotal').textContent=DATA.totals.events.toLocaleString();
+  document.getElementById('totalCount').textContent=DATA.totals.events.toLocaleString();
+},3000);
+
+function refreshData(){
+  const hints=[
+    'stats count by type','top 10 process','timechart span=1d count by type','search Error | head 20'
+  ];
+  const el=document.getElementById('searchHint');
+  el.textContent=hints[Math.floor(Math.random()*hints.length)];
+  addStreamRow();
+}
+
+init();
+</script>
 </body>
 </html>

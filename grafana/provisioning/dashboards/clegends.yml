@@ -1,0 +1,19 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Grafana auto-provisioning — Dashboard loader
+#
+#  Grafana scans the path below for JSON dashboard files and imports them
+#  automatically.  The dashboard JSON is in grafana/dashboards/.
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: 1
+
+providers:
+  - name:            C-Legends Dashboards
+    orgId:           1
+    type:            file
+    disableDeletion: false   # allow edits to be saved back
+    updateIntervalSeconds: 30
+    allowUiUpdates:  true
+    options:
+      path:          /etc/grafana/dashboards
+      foldersFromFilesStructure: false

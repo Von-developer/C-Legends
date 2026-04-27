@@ -2,16 +2,81 @@
 #include <string>
 #include <stdexcept>
 #include <limits>
+#include <chrono>
+#include <thread>
+#include <csignal>
+#include <condition_variable>
+#include <mutex>
+#include <atomic>
 
 #include "LogManager.h"
 #include "FileHandler.h"
 #include "ReportGenerator.h"
+#include "LiveFileWatcher.h"
+#include "PrometheusExporter.h"
 #include "LoginEvent.h"
 #include "ErrorEvent.h"
 #include "WarningEvent.h"
 #include "ActivityEvent.h"
 
-// ── Helper: get a non-empty string from the user ──────────────────────────
+// ── Signal handling for daemon mode ──────────────────────────────────────
+static std::mutex              g_shutdownMtx;
+static std::condition_variable g_shutdownCV;
+static std::atomic<bool>       g_shutdown{false};
+
+static void signalHandler(int) {
+    g_shutdown = true;
+    g_shutdownCV.notify_all();
+}
+
+// ── Daemon mode ───────────────────────────────────────────────────────────
+// Called when argv contains "--daemon".
+// Loads the log file, starts the Prometheus endpoint and live file watcher,
+// then blocks until SIGTERM or SIGINT — no interactive menu, no stdin reads.
+static int runDaemon(const std::string& logFile) {
+    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT,  signalHandler);
+
+    std::cout << "[daemon] C-Legends starting\n"
+              << "[daemon] Log file : " << logFile << "\n"
+              << "[daemon] Metrics  : http://0.0.0.0:9091/metrics\n";
+
+    LogManager      manager;
+    FileHandler     fileHandler(logFile);
+    PrometheusExporter prometheus(
+        [&manager]{ return manager.buildPrometheusMetrics(); },
+        9091
+    );
+
+    // Load existing log data
+    try {
+        fileHandler.loadFromFile(manager);
+    } catch (const std::runtime_error& ex) {
+        std::cerr << "[daemon] Note: " << ex.what() << " — starting with empty log.\n";
+    }
+
+    // Start Prometheus scrape endpoint
+    prometheus.start();
+
+    // Start live file watcher (polls for new lines every 500 ms)
+    LiveFileWatcher watcher(logFile, manager, std::chrono::milliseconds(500));
+    watcher.start();
+
+    std::cout << "[daemon] Ready — serving " << manager.getCount()
+              << " events. Waiting for SIGTERM...\n";
+    std::cout.flush();
+
+    // Block until signal
+    std::unique_lock<std::mutex> lk(g_shutdownMtx);
+    g_shutdownCV.wait(lk, []{ return g_shutdown.load(); });
+
+    std::cout << "[daemon] Shutting down cleanly...\n";
+    watcher.stop();
+    prometheus.stop();
+    return 0;
+}
+
+// ── Helper: get a string from the user ───────────────────────────────────
 static std::string prompt(const std::string& label) {
     std::string val;
     std::cout << label;
@@ -62,8 +127,23 @@ static void addEventWizard(LogManager& manager) {
     }
 }
 
+// ── Live watch session (interactive) ─────────────────────────────────────
+static void startLiveWatch(LogManager& manager, const std::string& filePath) {
+    std::cout << "\n[Live Watch] Starting on: " << filePath << "\n";
+    std::cout << "[Live Watch] Press ENTER at any time to stop...\n\n";
+
+    LiveFileWatcher watcher(filePath, manager, std::chrono::milliseconds(500));
+    watcher.start();
+
+    std::string dummy;
+    std::getline(std::cin, dummy);
+
+    watcher.stop();
+    std::cout << "[Live Watch] Session ended.\n";
+}
+
 // ── Menu display ──────────────────────────────────────────────────────────
-static void showMenu() {
+static void showMenu(bool prometheusRunning) {
     std::cout << "\n========================================\n";
     std::cout << "    System Log Analyzer — Main Menu\n";
     std::cout << "========================================\n";
@@ -76,6 +156,11 @@ static void showMenu() {
     std::cout << " 7. Generate summary report\n";
     std::cout << " 8. Save logs to file\n";
     std::cout << " 9. Load logs from file\n";
+    std::cout << "10. Start live file watch (real-time ingestion)\n";
+    std::cout << "11. Export geo data (GeoJSON + CSV)\n";
+    std::cout << "12. " << (prometheusRunning
+                            ? "Stop  Prometheus /metrics endpoint"
+                            : "Start Prometheus /metrics endpoint (port 9091)") << "\n";
     std::cout << " 0. Exit\n";
     std::cout << "========================================\n";
     std::cout << "Choice: ";
@@ -83,12 +168,26 @@ static void showMenu() {
 
 // ── main ──────────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
-    std::string inputFile = (argc > 1) ? argv[1] : "logs.csv";
-    LogManager      manager;
-    FileHandler     fileHandler(inputFile);
-    ReportGenerator reporter(manager);
+    // ── Daemon mode: used by Docker entrypoint ────────────────────────────
+    // Usage: ./log_analyzer --daemon [logfile]
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--daemon") {
+            std::string logFile = (i + 1 < argc) ? argv[i + 1] : "Mac.log";
+            return runDaemon(logFile);
+        }
+    }
 
-    // Load saved data on startup
+    // ── Interactive mode (normal terminal use) ────────────────────────────
+    std::string inputFile = (argc > 1) ? argv[1] : "logs.csv";
+    LogManager       manager;
+    FileHandler      fileHandler(inputFile);
+    ReportGenerator  reporter(manager);
+
+    PrometheusExporter prometheus(
+        [&manager]{ return manager.buildPrometheusMetrics(); },
+        9091
+    );
+
     try {
         fileHandler.loadFromFile(manager);
     } catch (const std::runtime_error& ex) {
@@ -97,9 +196,8 @@ int main(int argc, char* argv[]) {
 
     int choice = -1;
     while (choice != 0) {
-        showMenu();
+        showMenu(prometheus.isRunning());
 
-        // Exception handling for bad menu input
         try {
             if (!(std::cin >> choice))
                 throw std::invalid_argument("Please enter a number.");
@@ -113,20 +211,16 @@ int main(int argc, char* argv[]) {
 
         try {
             switch (choice) {
-                case 1:
-                    manager.displayAll();
-                    break;
-                case 2:
-                    addEventWizard(manager);
-                    break;
+                case 1:  manager.displayAll();           break;
+                case 2:  addEventWizard(manager);        break;
                 case 3: {
                     std::string id = prompt("Enter Event ID to remove: ");
-                    manager.removeEvent(id);   // throws out_of_range if not found
+                    manager.removeEvent(id);
                     std::cout << "Event " << id << " removed.\n";
                     break;
                 }
                 case 4: {
-                    std::string type = prompt("Type to search (Login/Error/Warning/Activity): ");
+                    std::string type = prompt("Type (Login/Error/Warning/Activity): ");
                     manager.searchByType(type);
                     break;
                 }
@@ -140,21 +234,39 @@ int main(int argc, char* argv[]) {
                     manager.filterWarnBySeverity(sev);
                     break;
                 }
-                case 7:
-                    reporter.displayReport();
+                case 7:  reporter.displayReport();       break;
+                case 8:  fileHandler.saveToFile(manager); break;
+                case 9:  fileHandler.loadFromFile(manager); break;
+                case 10: {
+                    std::string watchFile = prompt(
+                        "File to watch (Enter for current [" + inputFile + "]): ");
+                    if (watchFile.empty()) watchFile = inputFile;
+                    startLiveWatch(manager, watchFile);
                     break;
-                case 8:
-                    fileHandler.saveToFile(manager);
+                }
+                case 11: {
+                    manager.exportGeoJSON("geo_export.json");
+                    manager.exportGeoCSV("geo_export.csv");
+                    std::cout << "Files written: geo_export.json, geo_export.csv\n";
                     break;
-                case 9:
-                    fileHandler.loadFromFile(manager);
+                }
+                case 12: {
+                    if (prometheus.isRunning()) {
+                        prometheus.stop();
+                    } else {
+                        prometheus.start();
+                        std::cout << "Grafana → Add Prometheus datasource → "
+                                  << "http://localhost:9091\n";
+                    }
                     break;
+                }
                 case 0:
+                    prometheus.stop();
                     fileHandler.saveToFile(manager);
                     std::cout << "Goodbye.\n";
                     break;
                 default:
-                    throw std::invalid_argument("Choice must be 0-9.");
+                    throw std::invalid_argument("Choice must be 0-12.");
             }
         } catch (const std::out_of_range& ex) {
             std::cerr << "Not found: " << ex.what() << "\n";

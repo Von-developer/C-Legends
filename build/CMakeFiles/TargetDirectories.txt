@@ -1,0 +1,4 @@
+/Users/mukhammadaliyuldoshev/Desktop/C-Legends/build/CMakeFiles/maxminddb_vendor.dir
+/Users/mukhammadaliyuldoshev/Desktop/C-Legends/build/CMakeFiles/log_analyzer.dir
+/Users/mukhammadaliyuldoshev/Desktop/C-Legends/build/CMakeFiles/edit_cache.dir
+/Users/mukhammadaliyuldoshev/Desktop/C-Legends/build/CMakeFiles/rebuild_cache.dir

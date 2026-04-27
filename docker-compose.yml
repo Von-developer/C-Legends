@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  C-Legends  —  Docker Compose stack
+#
+#  Three containers:
+#    1. clegends-engine  — C++ log analyser (exposes /metrics on :9091)
+#    2. prometheus       — Scrapes the engine every 5 s
+#    3. grafana          — Visualises metrics; Geomap panel for IP traffic
+#
+#  Quick start:
+#    docker compose up --build
+#
+#  Then open:  http://localhost:3000  (admin / clegends)
+#  Dashboard is loaded automatically — no manual import needed.
+#
+#  Optional geo lookups:
+#    Download GeoLite2-City.mmdb and place it in this directory.
+#    It will be mounted into the engine container automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  clegends-net:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+services:
+
+  # ── Container 1: C++ Log Analysis Engine ─────────────────────────────────
+  clegends-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clegends-engine
+    restart: unless-stopped
+    networks:
+      - clegends-net
+    ports:
+      - "9091:9091"
+    volumes:
+      - ./logs:/app/logs:ro
+      - ./Mac.log:/app/Mac.log          # live log file — append to this on the host
+      - ./GeoLite2-City.mmdb:/app/GeoLite2-City.mmdb:ro   # MaxMind geo DB (permanent)
+    environment:
+      - LOG_FILE=Mac.log
+    stdin_open: true
+    tty: false
+    healthcheck:
+      # Pure bash TCP check — no curl/wget needed in the container
+      test: ["CMD-SHELL", "bash -c 'echo -e \"GET /metrics HTTP/1.0\\r\\n\" > /dev/tcp/localhost/9091' 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 20s
+
+  # ── Container 2: Prometheus ───────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: clegends-prometheus
+    restart: unless-stopped
+    networks:
+      - clegends-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux compatibility for host.docker.internal
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    depends_on:
+      clegends-engine:
+        condition: service_healthy
+
+  # ── Container 3: Grafana ──────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: clegends-grafana
+    restart: unless-stopped
+    networks:
+      - clegends-net
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=clegends
+      - GF_USERS_DEFAULT_THEME=dark
+      - GF_PANELS_ENABLE_ALPHA=true
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/dashboards/clegends_main.json
+    depends_on:
+      - prometheus
