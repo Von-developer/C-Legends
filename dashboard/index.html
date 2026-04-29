@@ -246,7 +246,7 @@ body{
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="#64748b" stroke-width="1.5"/><path d="m10.5 10.5 3.5 3.5" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/></svg>
     <input id="searchInput" value='index=main sourcetype=mac_log' spellcheck="false"/>
     <span class="pipe">|</span>
-    <span style="color:#94a3b8;font-size:11px" id="searchHint">stats count by type</span>
+    <span style="color:var(--muted);font-size:11px" id="searchHint">stats count by type</span>
   </div>
 
   <div class="topbar-right">
@@ -744,6 +744,7 @@ const sidebarTabs={
 };
 
 const searchInput=document.getElementById('searchInput');
+let lastQuery='';
 
 function renderSearchEmpty(message){
   const container=document.getElementById('searchResults');
@@ -812,6 +813,16 @@ function renderSearchResults(results,query){
 
 function performSearch(){
   const query=searchInput.value.trim();
+  if(query===lastQuery){
+    if(!query){
+      renderSearchEmpty('Enter a search term to see results.');
+      switchSidebarTab('processes',sidebarTabs.processes);
+    }else{
+      switchSidebarTab('results',sidebarTabs.results);
+    }
+    return;
+  }
+  lastQuery=query;
   if(!query){
     renderSearchEmpty('Enter a search term to see results.');
     switchSidebarTab('processes',sidebarTabs.processes);
