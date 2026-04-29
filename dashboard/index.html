@@ -653,7 +653,8 @@ function buildFieldList(){
 
 function switchSidebarTab(tab,tabElement){
   document.querySelectorAll('#sidebarTabs .tab').forEach(t=>t.classList.remove('active'));
-  if(tabElement) tabElement.classList.add('active');
+  const activeTab=tabElement||searchState.sidebarTabs[tab];
+  if(activeTab) activeTab.classList.add('active');
   const showResults=tab==='results';
   document.getElementById('fieldList').classList.toggle('hidden',showResults);
   document.getElementById('searchResults').classList.toggle('hidden',!showResults);
