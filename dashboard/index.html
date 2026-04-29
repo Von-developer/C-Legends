@@ -812,18 +812,12 @@ function renderSearchResults(results,query){
   }
 }
 
+function normalizeQuery(query){
+  return query.toLowerCase().split(/\s+/).filter(Boolean);
+}
+
 function performSearch(){
   const query=searchInput.value.trim();
-  if(query===lastQuery){
-    if(!query){
-      renderSearchEmpty('Enter a search term to see results.');
-      switchSidebarTab('processes',sidebarTabs.processes);
-    }else{
-      renderSearchResults(lastResults,query);
-      switchSidebarTab('results',sidebarTabs.results);
-    }
-    return;
-  }
   if(!query){
     renderSearchEmpty('Enter a search term to see results.');
     lastQuery='';
@@ -831,9 +825,14 @@ function performSearch(){
     switchSidebarTab('processes',sidebarTabs.processes);
     return;
   }
+  if(query===lastQuery){
+    renderSearchResults(lastResults,query);
+    switchSidebarTab('results',sidebarTabs.results);
+    return;
+  }
   lastQuery=query;
 
-  const terms=query.toLowerCase().split(/\s+/).filter(Boolean);
+  const terms=normalizeQuery(query);
   const results=DATA.stream.map(row=>({
     time:row[0],host:row[1],proc:row[2],type:row[3],msg:row[4],extra:row[5]||'—'
   })).filter(r=>{
