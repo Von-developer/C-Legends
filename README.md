@@ -23,3 +23,7 @@ g++ -std=c++17 -Wall -o SystemLogAnalyzer \
   - `./SystemLogAnalyzer Mac.log`
 - Run with the default sample file (`logs.csv`):
   - `./SystemLogAnalyzer`
+
+## UI Dashboard
+
+Open `dashboard/index.html` in a browser (or serve the `dashboard/` folder with any static file server).

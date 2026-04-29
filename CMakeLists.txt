@@ -92,10 +92,8 @@ else()
         "   and place it in ${CMAKE_SOURCE_DIR}/")
 endif()
 
-# ── Grafana dashboard install helper ─────────────────────────────────────
-# The dashboard JSON in dashboard/grafana_dashboard.json can be imported via:
-#   Grafana → + → Import → Upload JSON file
-message(STATUS "Grafana dashboard → ${CMAKE_SOURCE_DIR}/dashboard/grafana_dashboard.json")
+# ── UI dashboard helper ───────────────────────────────────────────────────
+message(STATUS "UI dashboard → ${CMAKE_SOURCE_DIR}/dashboard/index.html")
 
 # ── Print build summary ───────────────────────────────────────────────────
 message(STATUS "")

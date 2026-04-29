@@ -45,7 +45,32 @@ body{
   border-bottom:1px solid var(--border);
   gap:16px;
   flex-shrink:0;
+  position:relative;
 }
+.topbar-left{display:flex;align-items:center;gap:12px}
+.menu-btn{
+  width:34px;height:34px;border-radius:6px;
+  border:1px solid var(--border2);background:var(--surface2);
+  display:flex;flex-direction:column;justify-content:center;gap:4px;
+  padding:0 9px;cursor:pointer;
+}
+.menu-btn span{
+  height:2px;border-radius:2px;background:var(--text);opacity:0.85;
+}
+.menu-btn:focus{outline:1px solid var(--accent)}
+.menu-panel{
+  position:absolute;top:52px;left:16px;z-index:10;
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:8px;padding:8px;min-width:180px;display:none;
+  box-shadow:0 12px 30px rgba(0,0,0,0.35);
+}
+.menu-panel.open{display:block}
+.menu-item{
+  padding:8px 10px;border-radius:6px;font-size:12px;
+  color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;
+}
+.menu-item:hover{background:var(--surface3)}
+.menu-item:focus{outline:1px solid var(--accent);background:var(--surface3)}
 .logo{
   display:flex;align-items:center;gap:10px;
   font-weight:700;font-size:15px;letter-spacing:-0.02em;
@@ -103,6 +128,7 @@ body{
 .row.kpi-row{height:88px}
 .row.main-row{flex:1;min-height:0}
 .row.bottom-row{height:260px;flex-shrink:0}
+.row.events-row{height:320px;flex-shrink:0}
 
 /* ── KPI Cards ───────────────────────────────────────────────────── */
 .kpi{
@@ -141,6 +167,14 @@ body{
 }
 .panel-body{flex:1;min-height:0;position:relative}
 .chart-wrap{width:100%;height:100%}
+.sort-control{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--muted);
+}
+.sort-control select{
+  background:var(--surface2);border:1px solid var(--border2);
+  color:var(--text);font-size:11px;border-radius:5px;padding:4px 8px;
+}
 
 /* ── Event Table ─────────────────────────────────────────────────── */
 .evt-table-wrap{flex:1;overflow:auto;min-height:0}
@@ -161,7 +195,7 @@ body{
 .evt-table td.mono{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
 .evt-table td.msg{
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;
-  font-family:'JetBrains Mono',monospace;font-size:10px;color:#94a3b8;
+  font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);
 }
 .badge{
   display:inline-block;padding:2px 7px;border-radius:3px;
@@ -202,6 +236,26 @@ body{
 .field-bar-bg{height:3px;background:var(--surface3);border-radius:2px;margin-top:2px}
 .field-bar-fill{height:100%;border-radius:2px;background:var(--accent)}
 
+/* ── Search results sidebar ─────────────────────────────────────── */
+.sidebar-section{display:flex;flex-direction:column;gap:6px}
+.sidebar-section.hidden{display:none}
+.search-results{gap:8px}
+.search-summary{font-size:10px;color:var(--muted);letter-spacing:0.02em}
+.search-result{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;
+}
+.search-result-title{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600}
+.search-result-meta{
+  display:flex;gap:8px;font-size:10px;color:var(--muted);
+  font-family:'JetBrains Mono',monospace;
+}
+.search-result-msg{
+  font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.search-empty{font-size:11px;color:var(--muted);padding:6px 2px}
+
 /* ── Tab strip ───────────────────────────────────────────────────── */
 .tabs{display:flex;gap:2px;margin-bottom:10px;flex-shrink:0}
 .tab{
@@ -217,16 +271,23 @@ body{
 
 <!-- ── Topbar ──────────────────────────────────────────────────── -->
 <div class="topbar">
-  <div class="logo">
-    <div class="logo-icon">⬡</div>
-    C-LEGENDS <span>/ Log Intelligence Platform</span>
+  <div class="topbar-left">
+    <div class="menu-btn" id="menuBtn" role="button" tabindex="0" aria-label="Open menu" aria-expanded="false">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div class="logo">
+      <div class="logo-icon">⬡</div>
+      C-LEGENDS <span>/ Log Intelligence Platform</span>
+    </div>
   </div>
 
   <div class="search-bar">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="#64748b" stroke-width="1.5"/><path d="m10.5 10.5 3.5 3.5" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/></svg>
     <input id="searchInput" value='index=main sourcetype=mac_log' spellcheck="false"/>
     <span class="pipe">|</span>
-    <span style="color:#94a3b8;font-size:11px" id="searchHint">stats count by type</span>
+    <span style="color:var(--muted);font-size:11px" id="searchHint">stats count by type</span>
   </div>
 
   <div class="topbar-right">
@@ -236,6 +297,13 @@ body{
     </div>
     <div class="live-clock" id="clock">--:--:--</div>
     <button class="refresh-btn" onclick="refreshData()">▶ Search</button>
+  </div>
+
+  <div class="menu-panel" id="menuPanel">
+    <div class="menu-item" data-target="section-overview" tabindex="0" onkeydown="handleMenuKey(event,this)">Overview</div>
+    <div class="menu-item" data-target="section-timeline" tabindex="0" onkeydown="handleMenuKey(event,this)">Timeline & KPIs</div>
+    <div class="menu-item" data-target="section-stream" tabindex="0" onkeydown="handleMenuKey(event,this)">Live Stream</div>
+    <div class="menu-item" data-target="section-all-events" tabindex="0" onkeydown="handleMenuKey(event,this)">All Events</div>
   </div>
 </div>
 
@@ -258,7 +326,7 @@ body{
   </div>
 
   <!-- KPI Row -->
-  <div class="row kpi-row">
+  <div class="row kpi-row" id="section-overview">
     <div class="kpi" style="--kpi-color:#6366f1">
       <div class="kpi-label">Total Events</div>
       <div class="kpi-bottom">
@@ -322,15 +390,15 @@ body{
   </div>
 
   <!-- Main row: timeline + donut + field summary -->
-  <div class="row main-row">
+  <div class="row main-row" id="section-timeline">
     <!-- Timeline (wide) -->
     <div class="panel" style="flex:3">
       <div class="panel-header">
         <span class="panel-title">Event Volume Over Time</span>
         <div style="display:flex;gap:6px">
-          <div class="tabs" style="margin:0">
-            <div class="tab active" onclick="switchTimeline('stack',this)">Stacked</div>
-            <div class="tab" onclick="switchTimeline('line',this)">Lines</div>
+          <div class="tabs" id="timelineTabs" style="margin:0">
+            <div class="tab active" onclick="switchTimeline('stack',this)" tabindex="0" onkeydown="handleTimelineKey(event,'stack',this)">Stacked</div>
+            <div class="tab" onclick="switchTimeline('line',this)" tabindex="0" onkeydown="handleTimelineKey(event,'line',this)">Lines</div>
           </div>
           <span class="panel-badge">Jul 1–8</span>
         </div>
@@ -350,17 +418,21 @@ body{
     <!-- Field summary (Splunk sidebar style) -->
     <div class="panel" style="flex:1;min-width:200px">
       <div class="panel-header">
-        <span class="panel-title">Top Processes</span>
-        <span class="panel-badge">by count</span>
+        <span class="panel-title">Data Explorer</span>
+        <div class="tabs" id="sidebarTabs" style="margin:0">
+          <div class="tab active" data-tab="processes" onclick="switchSidebarTab('processes',this)" tabindex="0" onkeydown="handleSidebarKey(event,'processes',this)">Top Processes</div>
+          <div class="tab" data-tab="results" onclick="switchSidebarTab('results',this)" tabindex="0" onkeydown="handleSidebarKey(event,'results',this)">Search Results</div>
+        </div>
       </div>
       <div class="panel-body" style="overflow:auto">
-        <div id="fieldList"></div>
+        <div id="fieldList" class="sidebar-section"></div>
+        <div id="searchResults" class="sidebar-section search-results hidden"></div>
       </div>
     </div>
   </div>
 
   <!-- Bottom row: severity heatmap + bar chart + event table -->
-  <div class="row bottom-row">
+  <div class="row bottom-row" id="section-stream">
     <!-- Hourly heatmap-style bar -->
     <div class="panel" style="flex:1;min-width:220px">
       <div class="panel-header">
@@ -399,6 +471,39 @@ body{
             </tr>
           </thead>
           <tbody id="streamBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- All events -->
+  <div class="row events-row" id="section-all-events">
+    <div class="panel" style="flex:1">
+      <div class="panel-header">
+        <span class="panel-title">All Log Events</span>
+        <div class="sort-control">
+          <span>Sort</span>
+          <select id="allEventsSort">
+            <option value="latest">Latest</option>
+            <option value="oldest">Oldest</option>
+            <option value="type">Type (severity)</option>
+            <option value="process">Process A–Z</option>
+          </select>
+        </div>
+      </div>
+      <div class="evt-table-wrap">
+        <table class="evt-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Host</th>
+              <th>Process</th>
+              <th>Type</th>
+              <th>Message</th>
+              <th>Extra</th>
+            </tr>
+          </thead>
+          <tbody id="allEventsBody"></tbody>
         </table>
       </div>
     </div>
@@ -561,9 +666,16 @@ function buildTimelineOption(mode){
 
 function switchTimeline(mode,el){
   timelineMode=mode;
-  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('#timelineTabs .tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   timelineChart.setOption(buildTimelineOption(mode),true);
+}
+
+function handleTimelineKey(event,mode,tabElement){
+  if(event.key==='Enter' || event.key===' '){
+    event.preventDefault();
+    switchTimeline(mode,tabElement);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -625,6 +737,22 @@ function buildFieldList(){
         </div>
       </div>`;
   }).join('');
+}
+
+function switchSidebarTab(tab,tabElement){
+  document.querySelectorAll('#sidebarTabs .tab').forEach(t=>t.classList.remove('active'));
+  const activeTab=tabElement||searchState.sidebarTabs[tab];
+  if(activeTab) activeTab.classList.add('active');
+  const showResults=tab==='results';
+  document.getElementById('fieldList').classList.toggle('hidden',showResults);
+  document.getElementById('searchResults').classList.toggle('hidden',!showResults);
+}
+
+function handleSidebarKey(event,tab,tabElement){
+  if(event.key==='Enter' || event.key===' '){
+    event.preventDefault();
+    switchSidebarTab(tab,tabElement);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -705,6 +833,177 @@ function buildErrorTrend(){
 const badgeClass={
   Login:'badge-login',Error:'badge-error',Warning:'badge-warning',Activity:'badge-activity'
 };
+const typeOrder={ Error:0, Warning:1, Login:2, Activity:3 };
+
+const searchState={
+  sidebarTabs:{},
+  input:null,
+  lastQuery:'',
+  lastResults:[],
+  rows:[]
+};
+const allEventsState={
+  select:null,
+  sort:'latest'
+};
+
+function renderSearchEmpty(message){
+  const container=document.getElementById('searchResults');
+  container.innerHTML='';
+  const empty=document.createElement('div');
+  empty.className='search-empty';
+  empty.textContent=message;
+  container.appendChild(empty);
+}
+
+function renderSearchResults(results,query){
+  const container=document.getElementById('searchResults');
+  container.innerHTML='';
+
+  const summary=document.createElement('div');
+  summary.className='search-summary';
+  summary.textContent=`${results.length} result${results.length===1?'':'s'} for "${query}"`;
+  container.appendChild(summary);
+
+  if(results.length===0){
+    const empty=document.createElement('div');
+    empty.className='search-empty';
+    empty.textContent='No matches in the current sample data.';
+    container.appendChild(empty);
+    return;
+  }
+
+  results.slice(0,50).forEach(r=>{
+    const card=document.createElement('div');
+    card.className='search-result';
+
+    const title=document.createElement('div');
+    title.className='search-result-title';
+
+    const badge=document.createElement('span');
+    badge.className=`badge ${badgeClass[r.type]||'badge-activity'}`;
+    badge.textContent=r.type;
+
+    const proc=document.createElement('span');
+    proc.textContent=r.proc;
+
+    title.appendChild(badge);
+    title.appendChild(proc);
+
+    const meta=document.createElement('div');
+    meta.className='search-result-meta';
+    meta.textContent=`${r.time} • ${r.host} • ${r.extra}`;
+
+    const msg=document.createElement('div');
+    msg.className='search-result-msg';
+    msg.textContent=r.msg;
+
+    card.appendChild(title);
+    card.appendChild(meta);
+    card.appendChild(msg);
+    container.appendChild(card);
+  });
+
+  if(results.length>50){
+    const notice=document.createElement('div');
+    notice.className='search-summary';
+    notice.textContent=`Showing first 50 matches of ${results.length}.`;
+    container.appendChild(notice);
+  }
+}
+
+function parseQueryTerms(rawQuery){
+  return rawQuery.toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+function parseEventTimestamp(timeText){
+  const parsed=Date.parse(`2024 ${timeText}`);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function scrollToSection(targetId){
+  const target=document.getElementById(targetId);
+  if(target){
+    target.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+}
+
+function handleMenuKey(event,menuItem){
+  if(event.key==='Enter' || event.key===' '){
+    event.preventDefault();
+    const targetId=menuItem.getAttribute('data-target');
+    if(targetId) scrollToSection(targetId);
+    const panel=document.getElementById('menuPanel');
+    if(panel) panel.classList.remove('open');
+  }
+}
+
+function performSearch(){
+  if(!searchState.input){
+    return;
+  }
+  const query=searchState.input.value.trim();
+  if(!query){
+    renderSearchEmpty('Enter a search term to see results.');
+    searchState.lastQuery='';
+    searchState.lastResults=[];
+    switchSidebarTab('processes');
+    return;
+  }
+  if(query===searchState.lastQuery){
+    renderSearchResults(searchState.lastResults,query);
+    switchSidebarTab('results');
+    return;
+  }
+  searchState.lastQuery=query;
+
+  const terms=parseQueryTerms(query);
+  const results=searchState.rows.filter(r=>terms.every(term=>r.searchText.includes(term)));
+
+  searchState.lastResults=results;
+  renderSearchResults(results,query);
+  switchSidebarTab('results');
+}
+
+function sortAllEvents(sortKey){
+  const rows=[...searchState.rows];
+  if(sortKey==='oldest'){
+    rows.sort((a,b)=>a.timeValue-b.timeValue);
+  }else if(sortKey==='type'){
+    rows.sort((a,b)=>{
+      const diff=(a.typeRank-b.typeRank);
+      return diff!==0 ? diff : (b.timeValue-a.timeValue);
+    });
+  }else if(sortKey==='process'){
+    rows.sort((a,b)=>a.proc.localeCompare(b.proc));
+  }else{
+    rows.sort((a,b)=>b.timeValue-a.timeValue);
+  }
+  return rows;
+}
+
+function renderAllEvents(sortKey){
+  const tbody=document.getElementById('allEventsBody');
+  if(!tbody){
+    return;
+  }
+  const rows=sortAllEvents(sortKey);
+  tbody.innerHTML='';
+  const fragment=document.createDocumentFragment();
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="mono">${r.time}</td>
+      <td style="color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.host}</td>
+      <td style="color:var(--text);font-size:11px">${r.proc}</td>
+      <td><span class="badge ${badgeClass[r.type]||'badge-activity'}">${r.type}</span></td>
+      <td class="msg">${r.msg}</td>
+      <td class="mono" style="max-width:80px;overflow:hidden;text-overflow:ellipsis">${r.extra}</td>
+    `;
+    fragment.appendChild(tr);
+  });
+  tbody.appendChild(fragment);
+}
 
 let streamIdx=0;
 function addStreamRow(){
@@ -715,7 +1014,7 @@ function addStreamRow(){
   const tr=document.createElement('tr');
   tr.innerHTML=`
     <td class="mono">${time}</td>
-    <td style="color:#94a3b8;font-size:11px;font-family:'JetBrains Mono',monospace;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${host}</td>
+    <td style="color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${host}</td>
     <td style="color:var(--text);font-size:11px">${proc}</td>
     <td><span class="badge ${badgeClass[type]||'badge-activity'}">${type}</span></td>
     <td class="msg">${msg}</td>
@@ -799,6 +1098,72 @@ function drawSparkHex(id,data,color){
 //  INIT
 // ═══════════════════════════════════════════════════════════════════
 function init(){
+  searchState.input=document.getElementById('searchInput');
+  searchState.sidebarTabs={
+    processes:document.querySelector('#sidebarTabs .tab[data-tab="processes"]'),
+    results:document.querySelector('#sidebarTabs .tab[data-tab="results"]')
+  };
+  const menuBtn=document.getElementById('menuBtn');
+  const menuPanel=document.getElementById('menuPanel');
+  const toggleMenu=()=>{
+    const isOpen=menuPanel.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded',isOpen ? 'true' : 'false');
+  };
+
+  searchState.input.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      performSearch();
+    }
+  });
+
+  menuBtn.addEventListener('click',event=>{
+    event.stopPropagation();
+    toggleMenu();
+  });
+  menuBtn.addEventListener('keydown',event=>{
+    if(event.key==='Enter' || event.key===' '){
+      event.preventDefault();
+      toggleMenu();
+    }
+  });
+  menuPanel.addEventListener('click',event=>{
+    const item=event.target.closest('.menu-item');
+    if(item){
+      const targetId=item.getAttribute('data-target');
+      if(targetId) scrollToSection(targetId);
+      menuPanel.classList.remove('open');
+      menuBtn.setAttribute('aria-expanded','false');
+    }
+  });
+  document.addEventListener('click',event=>{
+    if(!menuPanel.contains(event.target) && !menuBtn.contains(event.target)){
+      menuPanel.classList.remove('open');
+      menuBtn.setAttribute('aria-expanded','false');
+    }
+  });
+
+  searchState.rows=DATA.stream.map(row=>{
+    const entry={
+      time:row[0],
+      host:row[1],
+      proc:row[2],
+      type:row[3],
+      msg:row[4],
+      extra:row[5]||'—'
+    };
+    entry.timeValue=parseEventTimestamp(entry.time);
+    entry.typeRank=typeOrder[entry.type] ?? 99;
+    entry.searchText=`${entry.time} ${entry.host} ${entry.proc} ${entry.type} ${entry.msg} ${entry.extra}`.toLowerCase();
+    return entry;
+  });
+  allEventsState.select=document.getElementById('allEventsSort');
+  allEventsState.select.value=allEventsState.sort;
+  allEventsState.select.addEventListener('change',()=>{
+    allEventsState.sort=allEventsState.select.value;
+    renderAllEvents(allEventsState.sort);
+  });
+
   // Timeline
   timelineChart=echarts.init(document.getElementById('chartTimeline'));
   timelineChart.setOption(buildTimelineOption('stack'));
@@ -808,12 +1173,17 @@ function init(){
 
   // Field list
   buildFieldList();
+  renderSearchEmpty('Enter a search term to see results.');
+  switchSidebarTab('processes');
 
   // Severity
   buildSeverity();
 
   // Error trend
   buildErrorTrend();
+
+  // All events
+  renderAllEvents(allEventsState.sort);
 
   // Sparkline
   drawSparkHex('sparkTotal', DATA.timeline.map(t=>t.total), '#6366f1');
@@ -839,6 +1209,9 @@ function refreshData(){
   const el=document.getElementById('searchHint');
   el.textContent=hints[Math.floor(Math.random()*hints.length)];
   addStreamRow();
+  if(searchState.input && searchState.input.value.trim()){
+    performSearch();
+  }
 }
 
 init();
