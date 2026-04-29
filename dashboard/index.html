@@ -738,12 +738,8 @@ const badgeClass={
   Login:'badge-login',Error:'badge-error',Warning:'badge-warning',Activity:'badge-activity'
 };
 
-const sidebarTabs={
-  processes:document.querySelector('#sidebarTabs .tab[data-tab="processes"]'),
-  results:document.querySelector('#sidebarTabs .tab[data-tab="results"]')
-};
-
-const searchInput=document.getElementById('searchInput');
+let sidebarTabs={};
+let searchInput=null;
 let lastQuery='';
 let lastResults=[];
 
@@ -938,6 +934,19 @@ function drawSparkHex(id,data,color){
 //  INIT
 // ═══════════════════════════════════════════════════════════════════
 function init(){
+  searchInput=document.getElementById('searchInput');
+  sidebarTabs={
+    processes:document.querySelector('#sidebarTabs .tab[data-tab="processes"]'),
+    results:document.querySelector('#sidebarTabs .tab[data-tab="results"]')
+  };
+
+  searchInput.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      performSearch();
+    }
+  });
+
   // Timeline
   timelineChart=echarts.init(document.getElementById('chartTimeline'));
   timelineChart.setOption(buildTimelineOption('stack'));
@@ -982,13 +991,6 @@ function refreshData(){
   addStreamRow();
   performSearch();
 }
-
-searchInput.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
-    e.preventDefault();
-    performSearch();
-  }
-});
 
 init();
 </script>
