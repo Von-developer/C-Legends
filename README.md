@@ -23,3 +23,13 @@ g++ -std=c++17 -Wall -o SystemLogAnalyzer \
   - `./SystemLogAnalyzer Mac.log`
 - Run with the default sample file (`logs.csv`):
   - `./SystemLogAnalyzer`
+
+## UI Dashboard (Grafana)
+
+The UI dashboard is powered by Grafana, backed by the C++ engine’s Prometheus metrics.
+
+```bash
+docker compose up --build
+```
+
+Then open http://localhost:3000 (admin / clegends). The dashboard is auto-provisioned.

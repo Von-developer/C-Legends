@@ -1,2 +1,0 @@
-/usr/bin/ar qc libmaxminddb_vendor.a CMakeFiles/maxminddb_vendor.dir/vendor/maxminddb/maxminddb.c.o
-/usr/bin/ranlib libmaxminddb_vendor.a
