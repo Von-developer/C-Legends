@@ -742,6 +742,7 @@ let sidebarTabs={};
 let searchInput=null;
 let lastQuery='';
 let lastResults=[];
+let searchRows=[];
 
 function renderSearchEmpty(message){
   const container=document.getElementById('searchResults');
@@ -813,6 +814,9 @@ function parseQueryTerms(rawQuery){
 }
 
 function performSearch(){
+  if(!searchInput){
+    return;
+  }
   const query=searchInput.value.trim();
   if(!query){
     renderSearchEmpty('Enter a search term to see results.');
@@ -829,12 +833,7 @@ function performSearch(){
   lastQuery=query;
 
   const terms=parseQueryTerms(query);
-  const results=DATA.stream.map(row=>({
-    time:row[0],host:row[1],proc:row[2],type:row[3],msg:row[4],extra:row[5]||'—'
-  })).filter(r=>{
-    const hay=[r.time,r.host,r.proc,r.type,r.msg,r.extra].join(' ').toLowerCase();
-    return terms.every(term=>hay.includes(term));
-  });
+  const results=searchRows.filter(r=>terms.every(term=>r.searchText.includes(term)));
 
   lastResults=results;
   renderSearchResults(results,query);
@@ -945,6 +944,19 @@ function init(){
       e.preventDefault();
       performSearch();
     }
+  });
+
+  searchRows=DATA.stream.map(row=>{
+    const entry={
+      time:row[0],
+      host:row[1],
+      proc:row[2],
+      type:row[3],
+      msg:row[4],
+      extra:row[5]||'—'
+    };
+    entry.searchText=`${entry.time} ${entry.host} ${entry.proc} ${entry.type} ${entry.msg} ${entry.extra}`.toLowerCase();
+    return entry;
   });
 
   // Timeline
