@@ -1,0 +1,4 @@
+/home/runner/work/C-Legends/C-Legends/build_ci/CMakeFiles/maxminddb_vendor.dir
+/home/runner/work/C-Legends/C-Legends/build_ci/CMakeFiles/log_analyzer.dir
+/home/runner/work/C-Legends/C-Legends/build_ci/CMakeFiles/edit_cache.dir
+/home/runner/work/C-Legends/C-Legends/build_ci/CMakeFiles/rebuild_cache.dir
