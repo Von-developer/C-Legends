@@ -651,9 +651,9 @@ function buildFieldList(){
   }).join('');
 }
 
-function switchSidebarTab(tab,el){
+function switchSidebarTab(tab,tabElement){
   document.querySelectorAll('#sidebarTabs .tab').forEach(t=>t.classList.remove('active'));
-  if(el) el.classList.add('active');
+  if(tabElement) tabElement.classList.add('active');
   const showResults=tab==='results';
   document.getElementById('fieldList').classList.toggle('hidden',showResults);
   document.getElementById('searchResults').classList.toggle('hidden',!showResults);
@@ -812,8 +812,8 @@ function renderSearchResults(results,query){
   }
 }
 
-function normalizeQuery(query){
-  return query.toLowerCase().split(/\s+/).filter(Boolean);
+function parseQueryTerms(rawQuery){
+  return rawQuery.toLowerCase().split(/\s+/).filter(Boolean);
 }
 
 function performSearch(){
@@ -832,7 +832,7 @@ function performSearch(){
   }
   lastQuery=query;
 
-  const terms=normalizeQuery(query);
+  const terms=parseQueryTerms(query);
   const results=DATA.stream.map(row=>({
     time:row[0],host:row[1],proc:row[2],type:row[3],msg:row[4],extra:row[5]||'—'
   })).filter(r=>{
