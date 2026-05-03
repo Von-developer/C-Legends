@@ -44,7 +44,24 @@ void LogManager::consumerLoop(std::stop_token st) {
             {
                 std::lock_guard<std::mutex> storeLk(logsMutex);
                 logs.push_back(e);
+
+                // ── In-memory cap: drop oldest 25% when limit hit ────────
+                // Prevents unbounded growth during long-running sessions
+                // (DShield live feed pushes ~1100 events every 5 min).
+                constexpr size_t MAX_LOG_EVENTS  = 50'000;
+                constexpr size_t TRIM_BATCH      = MAX_LOG_EVENTS / 4;
+                if (logs.size() > MAX_LOG_EVENTS) {
+                    for (size_t i = 0; i < TRIM_BATCH; ++i) delete logs[i];
+                    logs.erase(logs.begin(),
+                               logs.begin() + TRIM_BATCH);
+                    std::cout << "[LogManager] Memory cap reached — "
+                              << "trimmed " << TRIM_BATCH
+                              << " oldest events.\n";
+                }
             }
+
+            // ── Notify WebDashboardServer (WebSocket broadcast) ───────────
+            if (onNewEvent) onNewEvent(e);
 
             lk.lock();   // re-acquire before checking queue again
         }

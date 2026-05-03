@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# MacPorts prefix — required for find_package(CURL) on macOS with MacPorts
+list(APPEND CMAKE_PREFIX_PATH "/opt/local")
 # ── Build type default ────────────────────────────────────────────────────
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -32,6 +34,20 @@ target_include_directories(maxminddb_vendor PUBLIC
 # maxminddb.c is C, not C++ — make sure it's compiled with cc not c++
 set_target_properties(maxminddb_vendor PROPERTIES LINKER_LANGUAGE C)
 
+# ── External dependencies for DShieldInformer ────────────────────────────
+# nlohmann/json — header-only, fetched at configure time.
+include(FetchContent)
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# libcurl — system package (macOS: MacPorts via /opt/local, or brew;
+#                          Linux: apt install libcurl4-openssl-dev)
+find_package(CURL REQUIRED)
+
 # ── Core event / log sources ──────────────────────────────────────────────
 set(CORE_SOURCES
     Event.cpp
@@ -44,11 +60,14 @@ set(CORE_SOURCES
     ReportGenerator.cpp
 )
 
-# ── Live ingestion + geo + Prometheus sources ─────────────────────────────
+# ── Live ingestion + geo + Prometheus + WebSocket + Dashboard ────────────
 set(LIVE_SOURCES
     LiveFileWatcher.cpp
     GeoLocator.cpp
     PrometheusExporter.cpp
+    WebSocketServer.cpp
+    WebDashboardServer.cpp
+    DShieldInformer.cpp
 )
 
 # ── Main executable ───────────────────────────────────────────────────────
@@ -66,6 +85,8 @@ target_include_directories(log_analyzer PRIVATE
 target_link_libraries(log_analyzer PRIVATE
     maxminddb_vendor
     pthread       # std::jthread on Linux needs -lpthread
+    CURL::libcurl
+    nlohmann_json::nlohmann_json
 )
 
 # On Linux, link against libm for floating-point maths in the MMDB reader
@@ -105,5 +126,7 @@ message(STATUS " C++ standard: C++20")
 message(STATUS " Build type  : ${CMAKE_BUILD_TYPE}")
 message(STATUS " Prometheus  : http://0.0.0.0:9091/metrics  (starts with option 11)")
 message(STATUS " Geo DB      : GeoLite2-City.mmdb  (place next to binary)")
+message(STATUS " Web Server  : ./log_analyzer --serve Mac.log  → http://localhost:8080")
+message(STATUS "               Options: --http-port N  --ws-port N  --admin-pass secret")
 message(STATUS "═══════════════════════════════════════")
 message(STATUS "")
