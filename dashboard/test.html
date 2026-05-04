@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AI Thinking Orb</title>
+<style>
+  body {
+    margin: 0;
+    background: #05070a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    color: #9fffcf;
+  }
+
+  canvas {
+    background: radial-gradient(circle at center, #0b1220 0%, #03050a 70%);
+    border-radius: 12px;
+  }
+
+  #status {
+    margin-top: 16px;
+    font-size: 14px;
+    opacity: 0.8;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="orb" width="800" height="800"></canvas>
+<div id="status">Initializing...</div>
+
+<script>
+const canvas = document.getElementById("orb");
+const ctx = canvas.getContext("2d");
+
+const W = canvas.width;
+const H = canvas.height;
+const CX = W / 2;
+const CY = H / 2;
+
+const RADIUS = 220;
+const DOT_COUNT = 700;
+
+let angle = 0;
+
+// Generate sphere points
+const points = [];
+for (let i = 0; i < DOT_COUNT; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos((Math.random() * 2) - 1);
+
+  points.push({
+    x: RADIUS * Math.sin(phi) * Math.cos(theta),
+    y: RADIUS * Math.sin(phi) * Math.sin(theta),
+    z: RADIUS * Math.cos(phi)
+  });
+}
+
+// Pulses
+const pulses = [];
+setInterval(() => {
+  pulses.push({
+    start: performance.now(),
+    duration: 2000
+  });
+}, 1200);
+
+// Status messages
+const messages = [
+  "Analyzing context…",
+  "Searching vector space…",
+  "Optimizing response…",
+  "Refining semantic graph…",
+  "Resolving intent…",
+  "Compressing knowledge…"
+];
+
+let msgIndex = 0;
+setInterval(() => {
+  msgIndex = (msgIndex + 1) % messages.length;
+  document.getElementById("status").textContent = messages[msgIndex];
+}, 2200);
+
+// 3D rotation
+function rotate(p, ax, ay) {
+  let x = p.x;
+  let y = p.y;
+  let z = p.z;
+
+  // Y rotation
+  let cosY = Math.cos(ay);
+  let sinY = Math.sin(ay);
+  let dx = x * cosY - z * sinY;
+  let dz = x * sinY + z * cosY;
+
+  // X rotation
+  let cosX = Math.cos(ax);
+  let sinX = Math.sin(ax);
+  let dy = y * cosX - dz * sinX;
+  dz = y * sinX + dz * cosX;
+
+  return { x: dx, y: dy, z: dz };
+}
+
+// Draw loop
+function draw(time) {
+  ctx.clearRect(0, 0, W, H);
+
+  angle += 0.0025;
+
+  for (let p of points) {
+    const r = rotate(p, angle * 0.6, angle);
+
+    const scale = 400 / (400 + r.z);
+    const x = CX + r.x * scale;
+    const y = CY + r.y * scale;
+
+    let brightness = (r.z + RADIUS) / (2 * RADIUS);
+
+    // Pulse influence
+    let pulseGlow = 0;
+    for (let pulse of pulses) {
+      const t = (time - pulse.start) / pulse.duration;
+      if (t > 0 && t < 1) {
+        const wave = Math.sin(t * Math.PI);
+        const dist = Math.sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
+        pulseGlow += wave * (1 - Math.abs(dist - RADIUS) / RADIUS);
+      }
+    }
+
+    brightness += pulseGlow * 0.6;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 1.2 + brightness * 1.5, 0, Math.PI * 2);
+
+    const g = Math.floor(180 + brightness * 75);
+    ctx.fillStyle = `rgba(0, ${g}, 140, ${0.4 + brightness * 0.6})`;
+    ctx.fill();
+  }
+
+  // Cleanup old pulses
+  while (pulses.length && (time - pulses[0].start) > pulses[0].duration) {
+    pulses.shift();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>

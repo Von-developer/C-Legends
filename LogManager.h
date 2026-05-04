@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <thread>
 #include <atomic>
+#include <functional>
 
 class LogManager {
 private:
@@ -51,6 +52,13 @@ public:
 
     int  getCount()                      const { return (int)logs.size(); }
     const std::vector<Event*>& getLogs() const { return logs; }
+
+    // Expose the mutex so WebDashboardServer can lock while iterating getLogs()
+    std::mutex& getLogsMutex() const { return logsMutex; }
+
+    // Callback invoked by consumerLoop after each event is committed.
+    // WebDashboardServer wires this to pushEvent() for WS broadcasting.
+    std::function<void(const Event*)> onNewEvent;
 
     // Next auto-generated ID (e.g. "E005")
     std::string generateID() const;

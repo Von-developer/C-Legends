@@ -1,1 +1,28 @@
 SystemLogAnalyzer
+log_analyzer
+
+# Build artifacts
+*.o
+build_dshield/
+build/
+cmake-build-*/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs / exports
+logs.csv
+*.archive
+*.log
+!sample.log
+
+# Claude
+.claude/
