@@ -11,6 +11,9 @@
 #include <cctype>
 #include <regex>
 #include <iomanip>
+#include <chrono>
+#include <ctime>
+#include <filesystem>
 
 FileHandler::FileHandler(const std::string& file) : fileName(file) {}
 
@@ -204,6 +207,30 @@ void FileHandler::saveToFile(const LogManager& manager) const {
     std::string outFile = fileName;
     if (isMacLog()) {
         outFile = fileName.substr(0, fileName.size() - 4) + "_exported.csv";
+    }
+
+    // ── Pre-save rotation ────────────────────────────────────────────────
+    // If existing file is larger than 5 MB, archive it with a timestamp
+    // before overwriting.  Prevents unbounded growth across runs.
+    constexpr std::uintmax_t ROTATE_THRESHOLD = 5 * 1024 * 1024;   // 5 MB
+    std::error_code ec;
+    if (std::filesystem::exists(outFile, ec)) {
+        auto sz = std::filesystem::file_size(outFile, ec);
+        if (!ec && sz > ROTATE_THRESHOLD) {
+            auto t = std::chrono::system_clock::to_time_t(
+                         std::chrono::system_clock::now());
+            std::tm tm{};
+            localtime_r(&t, &tm);
+            char stamp[32];
+            std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tm);
+
+            std::string archive = outFile + "." + stamp + ".archive";
+            std::filesystem::rename(outFile, archive, ec);
+            if (!ec) {
+                std::cout << "[FileHandler] Rotated old log → "
+                          << archive << " (" << (sz / 1024) << " KB)\n";
+            }
+        }
     }
 
     std::ofstream file(outFile);

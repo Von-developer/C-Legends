@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>C-Legends Globe</title>
+
+<style>
+  body {
+    margin: 0;
+    background: radial-gradient(circle at center, #0b1220 0%, #03050a 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+  }
+
+  canvas {
+    border-radius: 16px;
+  }
+
+  h1 {
+    margin-top: 20px;
+    font-weight: 500;
+    letter-spacing: 3px;
+    font-size: 22px;
+    color: #00ffd0;
+    text-shadow:
+      0 0 10px rgba(0,255,200,0.7),
+      0 0 25px rgba(0,255,200,0.4);
+  }
+</style>
+</head>
+<body>
+
+<canvas id="globe" width="800" height="800"></canvas>
+<h1>C-Legends</h1>
+
+<!-- hidden world map -->
+<img id="map" src="https://upload.wikimedia.org/wikipedia/commons/8/80/World_map_blank_without_borders.svg" crossorigin="anonymous" style="display:none">
+
+<script>
+const canvas = document.getElementById("globe");
+const ctx = canvas.getContext("2d");
+
+const W = canvas.width;
+const H = canvas.height;
+const CX = W / 2;
+const CY = H / 2;
+
+const R = 250;
+const pts = [];
+let angle = 0;
+
+const img = document.getElementById("map");
+
+// load map and build globe points
+img.onload = () => {
+  const tempCanvas = document.createElement("canvas");
+  const tctx = tempCanvas.getContext("2d");
+
+  tempCanvas.width = img.width;
+  tempCanvas.height = img.height;
+  tctx.drawImage(img, 0, 0);
+
+  const data = tctx.getImageData(0, 0, img.width, img.height).data;
+
+  for (let i = 0; i < 12000; i++) {
+    let x = Math.floor(Math.random() * img.width);
+    let y = Math.floor(Math.random() * img.height);
+
+    let index = (y * img.width + x) * 4;
+    let brightness = data[index]; // grayscale
+
+    // only pick land areas
+    if (brightness > 120) {
+      let theta = (x / img.width) * 2 * Math.PI;
+      let phi = (y / img.height) * Math.PI;
+
+      let px = R * Math.sin(phi) * Math.cos(theta);
+      let py = R * Math.sin(phi) * Math.sin(theta);
+      let pz = R * Math.cos(phi);
+
+      pts.push({ x: px, y: py, z: pz });
+    }
+  }
+
+  requestAnimationFrame(draw);
+};
+
+// rotation math
+function rotate(p, ax, ay) {
+  let x = p.x, y = p.y, z = p.z;
+
+  let cosY = Math.cos(ay), sinY = Math.sin(ay);
+  let dx = x * cosY - z * sinY;
+  let dz = x * sinY + z * cosY;
+
+  let cosX = Math.cos(ax), sinX = Math.sin(ax);
+  let dy = y * cosX - dz * sinX;
+  dz = y * sinX + dz * cosX;
+
+  return { x: dx, y: dy, z: dz };
+}
+
+// animation loop
+function draw(t) {
+  ctx.clearRect(0, 0, W, H);
+
+  angle += 0.002;
+
+  for (let p of pts) {
+    let r = rotate(p, angle * 0.5, angle);
+
+    let scale = 600 / (600 + r.z);
+    let x = CX + r.x * scale;
+    let y = CY + r.y * scale;
+
+    let depth = (r.z + R) / (2 * R);
+
+    let size = 0.8 + depth * 1.5;
+
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = "rgba(0,255,200,0.6)";
+
+    ctx.fillStyle = `rgba(0, ${180 + depth * 75}, 200, ${0.5 + depth * 0.5})`;
+    ctx.fill();
+  }
+
+  requestAnimationFrame(draw);
+}
+</script>
+
+</body>
+</html>

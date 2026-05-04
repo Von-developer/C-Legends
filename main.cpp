@@ -14,6 +14,9 @@
 #include "ReportGenerator.h"
 #include "LiveFileWatcher.h"
 #include "PrometheusExporter.h"
+#include "WebDashboardServer.h"
+#include "GeoLocator.h"
+#include "DShieldInformer.h"
 #include "LoginEvent.h"
 #include "ErrorEvent.h"
 #include "WarningEvent.h"
@@ -43,6 +46,8 @@ static int runDaemon(const std::string& logFile) {
 
     LogManager      manager;
     FileHandler     fileHandler(logFile);
+    GeoLocator      geoLocator;                   // shared with DShieldInformer
+    DShieldInformer dshield(manager, geoLocator);
     PrometheusExporter prometheus(
         [&manager]{ return manager.buildPrometheusMetrics(); },
         9091
@@ -62,6 +67,9 @@ static int runDaemon(const std::string& logFile) {
     LiveFileWatcher watcher(logFile, manager, std::chrono::milliseconds(500));
     watcher.start();
 
+    // Start DShield live threat feed (poll every 5 minutes)
+    dshield.startLiveFeed(300);
+
     std::cout << "[daemon] Ready — serving " << manager.getCount()
               << " events. Waiting for SIGTERM...\n";
     std::cout.flush();
@@ -71,8 +79,103 @@ static int runDaemon(const std::string& logFile) {
     g_shutdownCV.wait(lk, []{ return g_shutdown.load(); });
 
     std::cout << "[daemon] Shutting down cleanly...\n";
+    dshield.stop();           // must be before manager.stopProcessing()
     watcher.stop();
     prometheus.stop();
+    return 0;
+}
+
+// ── Web-serve mode ────────────────────────────────────────────────────────
+// Usage: ./log_analyzer --serve [logfile] [--http-port 8080] [--ws-port 9090]
+//                                         [--admin-pass secret]
+//
+// Starts the full web dashboard + WebSocket live stream + LiveFileWatcher.
+// Navigate to http://localhost:8080 to open the dashboard.
+static int runServe(int argc, char* argv[]) {
+    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT,  signalHandler);
+
+    // Parse optional arguments
+    std::string logFile    = "Mac.log";
+    uint16_t    httpPort   = 8080;
+    uint16_t    wsPort     = 9090;
+    std::string adminPass  = "clegends-admin";
+    std::string logDir     = ".";
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--serve") {
+            if (i + 1 < argc && argv[i+1][0] != '-') logFile = argv[++i];
+        } else if (arg == "--http-port" && i + 1 < argc) {
+            httpPort = static_cast<uint16_t>(std::stoi(argv[++i]));
+        } else if (arg == "--ws-port" && i + 1 < argc) {
+            wsPort = static_cast<uint16_t>(std::stoi(argv[++i]));
+        } else if (arg == "--admin-pass" && i + 1 < argc) {
+            adminPass = argv[++i];
+        } else if (arg == "--log-dir" && i + 1 < argc) {
+            logDir = argv[++i];
+        }
+    }
+
+    std::cout << "[serve] C-Legends Web Dashboard\n"
+              << "[serve] Log file   : " << logFile   << "\n"
+              << "[serve] Dashboard  : http://0.0.0.0:" << httpPort << "\n"
+              << "[serve] WebSocket  : ws://0.0.0.0:"   << wsPort   << "\n";
+
+    LogManager  manager;
+    FileHandler fileHandler(logFile);
+    GeoLocator  geoLocator;                      // shared with DShieldInformer
+
+    // Wire WS push before loading (so batch-loaded events don't flood WS)
+    // We'll connect it after the dashboard server is constructed below.
+
+    // Load existing log data
+    try {
+        fileHandler.loadFromFile(manager);
+    } catch (const std::runtime_error& ex) {
+        std::cerr << "[serve] Note: " << ex.what() << " — starting with empty log.\n";
+    }
+
+    // Build and start the web dashboard server
+    WebDashboardServer::Config cfg;
+    cfg.httpPort      = httpPort;
+    cfg.wsPort        = wsPort;
+    cfg.dashboardDir  = "dashboard";
+    cfg.adminPassword = adminPass;
+    cfg.logDir        = logDir;
+
+    WebDashboardServer dashServer(manager, fileHandler, cfg);
+
+    // Wire LogManager → WebSocket push
+    manager.onNewEvent = [&dashServer](const Event* e) {
+        dashServer.pushEvent(e);
+    };
+
+    dashServer.start();
+
+    // Start live file watcher (polls for new lines → pushEvent → WS broadcast)
+    LiveFileWatcher watcher(logFile, manager, std::chrono::milliseconds(500));
+    watcher.start();
+
+    // Start DShield live threat feed → pushEvent → WS broadcast
+    DShieldInformer dshield(manager, geoLocator);
+    dshield.startLiveFeed(300);
+
+    std::cout << "[serve] Ready — " << manager.getCount()
+              << " events loaded. Open http://localhost:" << httpPort
+              << " in your browser.\n"
+              << "[serve] DShield live threats streaming (every 5 min).\n"
+              << "[serve] Press Ctrl+C to stop.\n";
+    std::cout.flush();
+
+    // Block until SIGTERM/SIGINT
+    std::unique_lock<std::mutex> lk(g_shutdownMtx);
+    g_shutdownCV.wait(lk, []{ return g_shutdown.load(); });
+
+    std::cout << "[serve] Shutting down...\n";
+    dshield.stop();           // must be before watcher/manager teardown
+    watcher.stop();
+    dashServer.stop();
     return 0;
 }
 
@@ -161,6 +264,8 @@ static void showMenu(bool prometheusRunning) {
     std::cout << "12. " << (prometheusRunning
                             ? "Stop  Prometheus /metrics endpoint"
                             : "Start Prometheus /metrics endpoint (port 9091)") << "\n";
+    std::cout << "13. Fetch DShield threats now (one-shot)\n";
+    std::cout << "14. Start/Stop DShield live threat feed (every 5 min)\n";
     std::cout << " 0. Exit\n";
     std::cout << "========================================\n";
     std::cout << "Choice: ";
@@ -168,12 +273,15 @@ static void showMenu(bool prometheusRunning) {
 
 // ── main ──────────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
-    // ── Daemon mode: used by Docker entrypoint ────────────────────────────
-    // Usage: ./log_analyzer --daemon [logfile]
+    // ── Mode dispatch based on first flag ────────────────────────────────
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--daemon") {
+        std::string arg = argv[i];
+        if (arg == "--daemon") {
             std::string logFile = (i + 1 < argc) ? argv[i + 1] : "Mac.log";
             return runDaemon(logFile);
+        }
+        if (arg == "--serve") {
+            return runServe(argc, argv);
         }
     }
 
@@ -182,6 +290,8 @@ int main(int argc, char* argv[]) {
     LogManager       manager;
     FileHandler      fileHandler(inputFile);
     ReportGenerator  reporter(manager);
+    GeoLocator       geoLocator;
+    DShieldInformer  dshield(manager, geoLocator);
 
     PrometheusExporter prometheus(
         [&manager]{ return manager.buildPrometheusMetrics(); },
@@ -260,13 +370,29 @@ int main(int argc, char* argv[]) {
                     }
                     break;
                 }
+                case 13: {
+                    std::cout << "Fetching DShield threats (this may take a few seconds)...\n";
+                    int added = dshield.fetchOnce();
+                    std::cout << "DShield fetch complete: " << added
+                              << " new event(s) added.\n";
+                    break;
+                }
+                case 14: {
+                    if (dshield.isRunning()) {
+                        dshield.stop();
+                    } else {
+                        dshield.startLiveFeed(300);
+                    }
+                    break;
+                }
                 case 0:
+                    dshield.stop();
                     prometheus.stop();
                     fileHandler.saveToFile(manager);
                     std::cout << "Goodbye.\n";
                     break;
                 default:
-                    throw std::invalid_argument("Choice must be 0-12.");
+                    throw std::invalid_argument("Choice must be 0-14.");
             }
         } catch (const std::out_of_range& ex) {
             std::cerr << "Not found: " << ex.what() << "\n";
