@@ -809,7 +809,10 @@ const DEMO_RISK = [
 ];
 
 const DEFAULT_WS_PORT = 9090;
-const WS_PORT = Number(document.body.dataset.wsPort) || DEFAULT_WS_PORT;
+const wsPortValue = document.body.dataset.wsPort;
+const WS_PORT = (wsPortValue && wsPortValue !== '__WS_PORT__' && !Number.isNaN(Number(wsPortValue)))
+  ? Number(wsPortValue)
+  : DEFAULT_WS_PORT;
 
 /* ════════════════════════════════════════════════════════════
    STATE

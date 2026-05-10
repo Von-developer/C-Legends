@@ -408,6 +408,10 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
     int total = 0, errors = 0, warnings = 0, logins = 0, activities = 0;
     std::unordered_map<std::string, int> countries, processes, days;
 
+    constexpr size_t kIsoDateLength = 10;
+    constexpr size_t kIsoYearMonthSep = 4;
+    constexpr size_t kIsoMonthDaySep = 7;
+
     for (const Event* e : logs) {
         ++total;
         const std::string& t = e->getType();
@@ -430,8 +434,10 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
         // Day bucket from timestamp: detect "YYYY-MM-DD" via hyphens, else legacy "Jul  1"
         const std::string& ts = e->getTimestamp();
         std::string day;
-        if (ts.size() >= 10 && ts[4] == '-' && ts[7] == '-') {
-            day = ts.substr(0, 10);
+        if (ts.size() >= kIsoDateLength &&
+            ts[kIsoYearMonthSep] == '-' &&
+            ts[kIsoMonthDaySep] == '-') {
+            day = ts.substr(0, kIsoDateLength);
         } else if (ts.size() >= 6) {
             day = ts.substr(0, 6);
         } else {
