@@ -160,7 +160,7 @@ void WebDashboardServer::handleClient(int fd) {
                                                    resp = routeApiFiles(req);
         else if (req.path == "/api/files/load")    resp = routeApiFilesLoad(req);
         else if (req.path == "/api/files/remove")  resp = routeApiFilesRemove(req);
-        else if (req.path == "/api/events/remove") resp = routeApiFilesRemove(req);
+        else if (req.path == "/api/events/remove") resp = routeApiFilesRemove(req); // legacy UI alias
         else if (req.path == "/api/files/read")    resp = routeApiFilesRead(req);
         else if (req.path == "/api/files/append")  resp = routeApiFilesAppend(req);
         else if (req.path == "/api/auth")          resp = routeApiAuth(req);
@@ -427,7 +427,7 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
         else if (auto* ae = dynamic_cast<const ActivityEvent*>(e)) proc = ae->getExtra2();
         if (!proc.empty()) ++processes[proc];
 
-        // Day bucket from timestamp: ISO "YYYY-MM-DD ..." or legacy "Jul  1"
+        // Day bucket from timestamp: detect "YYYY-MM-DD" via hyphens, else legacy "Jul  1"
         const std::string& ts = e->getTimestamp();
         std::string day;
         if (ts.size() >= 10 && ts[4] == '-' && ts[7] == '-') {

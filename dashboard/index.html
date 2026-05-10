@@ -808,7 +808,8 @@ const DEMO_RISK = [
   {ip:'45.33.32.156',riskScore:40,count:5,countries:['United States','Canada'],cities:['Fremont','Toronto']},
 ];
 
-const WS_PORT = Number(document.body.dataset.wsPort) || 9090;
+const DEFAULT_WS_PORT = 9090;
+const WS_PORT = Number(document.body.dataset.wsPort) || DEFAULT_WS_PORT;
 
 /* ════════════════════════════════════════════════════════════
    STATE
