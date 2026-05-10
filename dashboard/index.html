@@ -385,7 +385,7 @@ html,body{height:100%;background:var(--bg0);color:var(--text);font-family:'Inter
 select.ap-input option{background:var(--bg2);color:var(--text)}
 </style>
 </head>
-<body>
+<body data-ws-port="__WS_PORT__">
 
 <!-- ╔══════════════════════════════════════════════════════════╗
      ║  TOP BAR                                                 ║
@@ -789,7 +789,7 @@ const DEMO_EVENTS = [
   {id:10,timestamp:'2024-01-15 10:28:33',type:'Warning',ip:'103.21.244.0',country:'Brazil',city:'São Paulo',message:'Failed login attempt #5 for user admin'},
 ];
 const DEMO_STATS = {
-  total:1247,errors:234,warnings:389,info:541,debug:83,
+  total:1247,errors:234,warnings:389,logins:342,activities:282,
   countries:[
     {name:'United States',count:312},{name:'China',count:201},{name:'Russia',count:187},
     {name:'Germany',count:98},{name:'Brazil',count:76},{name:'Japan',count:65},
@@ -808,6 +808,8 @@ const DEMO_RISK = [
   {ip:'45.33.32.156',riskScore:40,count:5,countries:['United States','Canada'],cities:['Fremont','Toronto']},
 ];
 
+const WS_PORT = Number(document.body.dataset.wsPort) || 9090;
+
 /* ════════════════════════════════════════════════════════════
    STATE
 ════════════════════════════════════════════════════════════ */
@@ -820,6 +822,7 @@ let evPage = 1, evTotal = 0;
 let rpPage = 1, rpTotal = 0, rpQuery = '';
 let streamCount = 0;
 let worldMapLoaded = false;
+let mapCountries = DEMO_STATS.countries;
 
 /* ════════════════════════════════════════════════════════════
    INIT
@@ -864,7 +867,7 @@ function loadWorldMap() {
 function initMapChart() {
   const el = document.getElementById('map-chart');
   mapChart = echarts.init(el, 'dark');
-  renderMap(mapChart, DEMO_STATS.countries);
+  renderMap(mapChart, mapCountries);
   window.addEventListener('resize', () => mapChart && mapChart.resize());
 
   mapChart.on('click', params => {
@@ -874,7 +877,7 @@ function initMapChart() {
       document.getElementById('btn-focus-mode').classList.add('on');
       document.getElementById('focus-label').style.display = 'block';
       document.getElementById('focus-name').textContent = params.name;
-      renderMap(mapChart, DEMO_STATS.countries);
+      renderMap(mapChart, mapCountries);
     }
   });
 }
@@ -963,8 +966,8 @@ function toggleFocusMode() {
   const btn = document.getElementById('btn-focus-mode');
   if (focusMode) {
     btn.classList.add('on');
-    if (!focusCountry && DEMO_STATS.countries.length) {
-      focusCountry = DEMO_STATS.countries[0].name;
+    if (!focusCountry && mapCountries.length) {
+      focusCountry = mapCountries[0].name;
     }
     document.getElementById('focus-label').style.display = focusCountry ? 'block' : 'none';
     document.getElementById('focus-name').textContent = focusCountry;
@@ -973,7 +976,7 @@ function toggleFocusMode() {
     focusCountry = '';
     document.getElementById('focus-label').style.display = 'none';
   }
-  renderMap(mapChart, DEMO_STATS.countries);
+  renderMap(mapChart, mapCountries);
 }
 
 function geoFocus() {
@@ -984,7 +987,7 @@ function geoFocus() {
   document.getElementById('btn-focus-mode').classList.add('on');
   document.getElementById('focus-label').style.display = 'block';
   document.getElementById('focus-name').textContent = val;
-  renderMap(mapChart, DEMO_STATS.countries);
+  renderMap(mapChart, mapCountries);
   // Try to zoom to the country
   if (mapChart) {
     const coords = COUNTRY_COORDS[val];
@@ -1000,7 +1003,7 @@ function clearFocus() {
   document.getElementById('geo-input').value = '';
   document.getElementById('btn-focus-mode').classList.remove('on');
   document.getElementById('focus-label').style.display = 'none';
-  renderMap(mapChart, DEMO_STATS.countries);
+  renderMap(mapChart, mapCountries);
   resetMapZoom();
 }
 
@@ -1040,6 +1043,8 @@ function renderTimelineChart(tl) {
 
 function renderPieChart(s) {
   if (!pieChart) return;
+  const logins = s.logins ?? s.info ?? 0;
+  const activities = s.activities ?? s.debug ?? 0;
   pieChart.setOption({
     backgroundColor: 'transparent',
     tooltip: { trigger:'item', backgroundColor:'#13162a', borderColor:'#2a2f4a', textStyle:{color:'#e2e8f0'} },
@@ -1049,8 +1054,8 @@ function renderPieChart(s) {
       data: [
         {value:s.errors, name:'Error', itemStyle:{color:'#ef4444'}},
         {value:s.warnings, name:'Warning', itemStyle:{color:'#f59e0b'}},
-        {value:s.info, name:'Info', itemStyle:{color:'#4f8ef7'}},
-        {value:s.debug, name:'Debug', itemStyle:{color:'#64748b'}},
+        {value:logins, name:'Login', itemStyle:{color:'#4f8ef7'}},
+        {value:activities, name:'Activity', itemStyle:{color:'#64748b'}},
       ],
       label:{show:false},
       itemStyle:{borderRadius:4,borderColor:'#0d0f1a',borderWidth:2}
@@ -1094,14 +1099,27 @@ function applyStats(s) {
   const listData = hasCountries ? s.countries
                   : (s.processes || []).map(p => ({name: p.name, count: p.count}));
 
-  document.getElementById('kpi-countries').textContent = hasCountries ? s.countries.length : 0;
+  mapCountries = hasCountries ? s.countries : [];
+  document.getElementById('kpi-countries').textContent = mapCountries.length;
 
   // Update the "Top Countries" panel header to reflect actual data
   const panelHdr = document.querySelector('#panel-country .an-hdr');
   if (panelHdr) panelHdr.textContent = hasCountries ? 'Top Countries' : 'Top Processes';
 
+  if (!hasCountries) {
+    focusMode = false;
+    focusCountry = '';
+    const btn = document.getElementById('btn-focus-mode');
+    if (btn) btn.classList.remove('on');
+    const focusLabel = document.getElementById('focus-label');
+    if (focusLabel) focusLabel.style.display = 'none';
+    const focusInput = document.getElementById('geo-input');
+    if (focusInput) focusInput.value = '';
+  }
+
   renderCountryList(listData);
-  if (hasCountries) renderMap(mapChart, s.countries);
+  renderMap(mapChart, mapCountries);
+  if (rpMapChart) renderMap(rpMapChart, mapCountries);
 
   if (s.timeline) renderTimelineChart(s.timeline);
   renderPieChart(s);
@@ -1214,7 +1232,7 @@ function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const host = location.hostname || 'localhost';
   try {
-    ws = new WebSocket(`${proto}://${host}:9090`);
+    ws = new WebSocket(`${proto}://${host}:${WS_PORT}`);
     ws.onopen = () => setLiveStatus(true);
     ws.onclose = () => { setLiveStatus(false); setTimeout(connectWS, 4000); };
     ws.onerror = () => setLiveStatus(false);
@@ -1285,7 +1303,7 @@ function openResults() {
   document.getElementById('rp-query-label').textContent = `"${rpQuery}"`;
   if (!rpMapChart) {
     rpMapChart = echarts.init(document.getElementById('rp-map'), 'dark');
-    renderMap(rpMapChart, DEMO_STATS.countries);
+    renderMap(rpMapChart, mapCountries);
     window.addEventListener('resize', () => rpMapChart && rpMapChart.resize());
   }
   setTimeout(() => rpMapChart && rpMapChart.resize(), 50);
