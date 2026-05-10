@@ -160,6 +160,7 @@ void WebDashboardServer::handleClient(int fd) {
                                                    resp = routeApiFiles(req);
         else if (req.path == "/api/files/load")    resp = routeApiFilesLoad(req);
         else if (req.path == "/api/files/remove")  resp = routeApiFilesRemove(req);
+        else if (req.path == "/api/events/remove") resp = routeApiFilesRemove(req); // legacy dashboard UI alias
         else if (req.path == "/api/files/read")    resp = routeApiFilesRead(req);
         else if (req.path == "/api/files/append")  resp = routeApiFilesAppend(req);
         else if (req.path == "/api/auth")          resp = routeApiAuth(req);
@@ -407,6 +408,10 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
     int total = 0, errors = 0, warnings = 0, logins = 0, activities = 0;
     std::unordered_map<std::string, int> countries, processes, days;
 
+    constexpr size_t kIsoDateLength = 10;
+    constexpr size_t kIsoYearMonthSep = 4;
+    constexpr size_t kIsoMonthDaySep = 7;
+
     for (const Event* e : logs) {
         ++total;
         const std::string& t = e->getType();
@@ -426,9 +431,18 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
         else if (auto* ae = dynamic_cast<const ActivityEvent*>(e)) proc = ae->getExtra2();
         if (!proc.empty()) ++processes[proc];
 
-        // Day bucket from timestamp (first 6 chars: "Jul  1")
-        std::string day = e->getTimestamp().size() >= 6
-                        ? e->getTimestamp().substr(0, 6) : "?";
+        // Day bucket from timestamp: detect "YYYY-MM-DD" via hyphens, else legacy "Jul  1"
+        const std::string& ts = e->getTimestamp();
+        std::string day;
+        if (ts.size() >= kIsoDateLength &&
+            ts[kIsoYearMonthSep] == '-' &&
+            ts[kIsoMonthDaySep] == '-') {
+            day = ts.substr(0, kIsoDateLength);
+        } else if (ts.size() >= 6) {
+            day = ts.substr(0, 6);
+        } else {
+            day = "?";
+        }
         ++days[day];
     }
 
@@ -886,6 +900,16 @@ std::string WebDashboardServer::routeStatic(const Request& req) {
     std::string content = readFile(filePath);
     if (content.empty() && p != "/index.html")
         return "HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found";
+
+    if (!content.empty() && p == "/index.html") {
+        const std::string token = "__WS_PORT__";
+        const std::string wsPort = std::to_string(cfg_.wsPort);
+        size_t pos = 0;
+        while ((pos = content.find(token, pos)) != std::string::npos) {
+            content.replace(pos, token.size(), wsPort);
+            pos += wsPort.size();
+        }
+    }
 
     std::string ct = contentType(filePath);
     return "HTTP/1.1 200 OK\r\n"
