@@ -160,7 +160,7 @@ void WebDashboardServer::handleClient(int fd) {
                                                    resp = routeApiFiles(req);
         else if (req.path == "/api/files/load")    resp = routeApiFilesLoad(req);
         else if (req.path == "/api/files/remove")  resp = routeApiFilesRemove(req);
-        else if (req.path == "/api/events/remove") resp = routeApiFilesRemove(req); // legacy UI alias
+        else if (req.path == "/api/events/remove") resp = routeApiFilesRemove(req); // legacy dashboard UI alias
         else if (req.path == "/api/files/read")    resp = routeApiFilesRead(req);
         else if (req.path == "/api/files/append")  resp = routeApiFilesAppend(req);
         else if (req.path == "/api/auth")          resp = routeApiAuth(req);

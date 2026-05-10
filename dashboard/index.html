@@ -1044,6 +1044,7 @@ function renderTimelineChart(tl) {
 
 function renderPieChart(s) {
   if (!pieChart) return;
+  // Backward compatibility: older demo stats used info/debug fields.
   const logins = s.logins ?? s.info ?? 0;
   const activities = s.activities ?? s.debug ?? 0;
   pieChart.setOption({
