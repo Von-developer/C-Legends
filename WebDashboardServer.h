@@ -76,6 +76,9 @@ public:
         std::string dashboardDir  = "dashboard";
         std::string adminPassword = "clegends-admin";
         std::string logDir        = ".";    // directory scanned for log files
+        // OpenAI integration. If empty, /api/ai/* routes return 503.
+        std::string openaiKey     = "";
+        std::string openaiModel   = "gpt-4o";
     };
 
     explicit WebDashboardServer(LogManager&   manager,
@@ -142,7 +145,19 @@ private:
     std::string routeApiFilesAppend(const Request& req);
     std::string routeApiAuth(const Request& req);
     std::string routeApiRisk(const Request& req);
+    std::string routeApiConfig(const Request& req);
+    std::string routeApiAiChat(const Request& req);
+    std::string routeApiAiSummary(const Request& req);
     std::string routeStatic(const Request& req);
+
+    // OpenAI helper — POST chat/completions via curl, return assistant text.
+    // On error returns empty string and writes reason into errOut.
+    std::string callOpenAI(const std::string& systemPrompt,
+                           const std::string& userPrompt,
+                           int maxTokens,
+                           std::string& errOut) const;
+    // Build LOG_DATA snippet for a country (last N events as JSON array).
+    std::string buildCountryLogContext(const std::string& country, int maxEvents) const;
 
     // ── RBAC helpers ──────────────────────────────────────────────────────
     bool isAdmin(const Request& req) const;

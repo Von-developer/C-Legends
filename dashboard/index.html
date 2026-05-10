@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>C-Legends Log Intelligence</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<!-- Three.js + OrbitControls (UMD bundles) for 3D globe -->
+<!--
+  three@≥0.148 removed legacy examples/js UMD bundles from npm; loading the old URL
+  returns 404 and breaks Globe (blocking script parses error text → blank / frozen UI).
+  Keep three.min.js + OrbitControls on the SAME release (0.147 is last CDN line with legacy path).
+-->
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<!-- C-Legends globe data + module -->
+<script src="js/country_centroids.js" defer></script>
+<script src="js/cities.js" defer></script>
+<script src="js/globe.js" defer></script>
 <style>
 /* ═══════════════════════════════════════════════════════════════
    RESET & TOKENS
@@ -154,11 +166,18 @@ html,body{height:100%;background:var(--bg0);color:var(--text);font-family:'Inter
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MAP
+   MAP / GLOBE
 ═══════════════════════════════════════════════════════════════ */
-#map-section{flex:0 0 420px;transition:flex-basis .2s}
-#map-container{height:380px;position:relative}
-#map-chart{width:100%;height:100%}
+#map-section{flex:0 0 480px;transition:flex-basis .2s}
+#map-flex{display:flex;height:460px;width:100%;min-height:0}
+#globe-wrap{flex:1 1 auto;position:relative;min-width:0;background:radial-gradient(circle at 50% 35%,#0e1430 0%,#05070f 75%)}
+#globe-canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#globe-canvas:active{cursor:grabbing}
+.globe-empty{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;color:var(--text3);font-size:13px;padding:20px;pointer-events:none;
+  background:radial-gradient(circle at center,rgba(79,142,247,.06),transparent 70%)
+}
 #map-controls{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:50}
 .map-btn{
   display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;
@@ -180,6 +199,93 @@ html,body{height:100%;background:var(--bg0);color:var(--text);font-family:'Inter
   position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
   background:rgba(79,142,247,.15);border:1px solid var(--accent);color:var(--accent);
   padding:4px 14px;border-radius:20px;font-size:12px;display:none;z-index:50
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COUNTRY PANEL (right-side intel drawer)
+═══════════════════════════════════════════════════════════════ */
+#country-panel{
+  flex:0 0 0;width:0;overflow:hidden;background:var(--bg1);
+  border-left:1px solid var(--border);display:flex;flex-direction:column;
+  transition:flex-basis .25s ease,width .25s ease
+}
+#country-panel.open{flex:0 0 380px;width:380px}
+.cp-hdr{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.cp-hdr h3{font-size:14px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cp-back{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:6px 8px;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:4px;
+  font-size:12px;transition:all .15s
+}
+.cp-back:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cp-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:14px;min-height:0}
+.cp-body::-webkit-scrollbar{width:5px}
+.cp-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.cp-section{display:flex;flex-direction:column;gap:8px}
+.cp-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)}
+.cp-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cp-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px}
+.cp-stat .v{font-size:20px;font-weight:700;color:var(--text);line-height:1}
+.cp-stat .l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.cp-summary{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;
+  font-size:12.5px;line-height:1.55;color:var(--text2);white-space:pre-wrap
+}
+.cp-summary.loading{color:var(--text3);font-style:italic}
+.cp-summary.error{border-color:rgba(239,68,68,.3);color:var(--red)}
+
+/* Chat */
+#cp-chat{display:flex;flex-direction:column;gap:8px;flex-shrink:0;border-top:1px solid var(--border);padding-top:12px}
+#cp-chat-log{
+  display:flex;flex-direction:column;gap:8px;max-height:240px;overflow-y:auto;
+  padding-right:2px
+}
+#cp-chat-log::-webkit-scrollbar{width:4px}
+#cp-chat-log::-webkit-scrollbar-thumb{background:var(--border)}
+.chat-msg{padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;max-width:92%}
+.chat-msg.user{align-self:flex-end;background:rgba(79,142,247,.18);border:1px solid rgba(79,142,247,.3);color:var(--text)}
+.chat-msg.bot{align-self:flex-start;background:var(--bg2);border:1px solid var(--border);color:var(--text2);white-space:pre-wrap}
+.chat-msg.warn{align-self:flex-start;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:var(--amber);font-weight:500}
+.chat-msg.error{align-self:flex-start;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red)}
+#cp-chat-form{display:flex;gap:6px}
+#cp-chat-input{
+  flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:8px 12px;color:var(--text);font-size:13px;outline:none
+}
+#cp-chat-input:focus{border-color:var(--accent)}
+#cp-chat-send{
+  background:var(--accent);border:none;border-radius:8px;padding:8px 14px;
+  color:#fff;cursor:pointer;font-size:13px;font-weight:600
+}
+#cp-chat-send:disabled{opacity:.5;cursor:not-allowed}
+
+/* ═══════════════════════════════════════════════════════════════
+   SIDEBAR OVERLAY (mobile/tablet)
+═══════════════════════════════════════════════════════════════ */
+#sidebar-scrim{
+  position:fixed;inset:52px 0 0 0;background:rgba(0,0,0,.45);
+  display:none;z-index:599;backdrop-filter:blur(2px)
+}
+#sidebar-scrim.on{display:block}
+#hamburger{
+  display:none;background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--text);
+  align-items:center;gap:6px;font-size:13px
+}
+#hamburger:hover{background:var(--bg3)}
+.sidebar-back{display:none}
+@media (max-width:1023px){
+  #sidebar{
+    position:fixed;top:52px;left:0;bottom:0;width:min(280px,86vw);z-index:600;
+    transform:translateX(-100%);transition:transform .22s ease;
+    box-shadow:2px 0 18px rgba(0,0,0,.5)
+  }
+  #sidebar.open{transform:translateX(0)}
+  #hamburger{display:inline-flex}
+  .sidebar-back{display:inline-flex;align-items:center;gap:6px;margin:8px 8px 0;
+    background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+    padding:8px 12px;cursor:pointer;color:var(--text);font-size:13px;width:calc(100% - 16px)}
+  .sidebar-back:hover{background:var(--accent);color:#fff}
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -284,21 +390,22 @@ html,body{height:100%;background:var(--bg0);color:var(--text);font-family:'Inter
 #rp-body{
   flex:1;display:grid;min-height:0;
   grid-template-columns:1fr 5px 360px;
-  grid-template-rows:1fr 5px 220px
+  grid-template-rows:auto 1fr
 }
-#rp-map-cell{grid-column:1;grid-row:1/3;background:var(--bg1);overflow:hidden}
-#rp-map{width:100%;height:100%}
-#rp-hdiv{grid-column:1;grid-row:3;background:var(--bg1);border-top:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column}
+#rp-map-cell{display:none}
+#rp-map{display:none}
+#rp-rowdiv{display:none}
+#rp-hdiv{grid-column:1;grid-row:1/3;background:var(--bg1);overflow:hidden;display:flex;flex-direction:column}
 #rp-hdiv .an-hdr{padding:8px 14px}
-#rp-stats-cell{grid-column:3;grid-row:1;background:var(--bg1);border-left:1px solid var(--border);overflow-y:auto;padding:12px}
+#rp-stats-cell{grid-column:3;grid-row:1;background:var(--bg1);border-left:1px solid var(--border);overflow-y:auto;padding:12px;max-height:280px}
 .rp-stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px}
 .rp-stat-card .label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
 .rp-stat-card .value{font-size:20px;font-weight:700;color:var(--text);margin-top:2px}
-#rp-vdiv{grid-column:2;grid-row:1/4;cursor:ew-resize;background:var(--border);width:5px}
+#rp-vdiv{grid-column:2;grid-row:1/3;cursor:ew-resize;background:var(--border);width:5px}
 #rp-vdiv:hover,#rp-vdiv.dragging{background:var(--accent)}
 #rp-rowdiv{grid-column:1;grid-row:2;cursor:ns-resize;background:var(--border);height:5px}
 #rp-rowdiv:hover,#rp-rowdiv.dragging{background:var(--accent)}
-#rp-list-cell{grid-column:3;grid-row:3;background:var(--bg1);border-left:1px solid var(--border);border-top:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#rp-list-cell{grid-column:3;grid-row:2;background:var(--bg1);border-left:1px solid var(--border);border-top:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 #rp-list-wrap{flex:1;overflow-y:auto}
 #rp-list-wrap::-webkit-scrollbar{width:4px}
 #rp-list-wrap::-webkit-scrollbar-thumb{background:var(--border)}
@@ -383,6 +490,81 @@ html,body{height:100%;background:var(--bg0);color:var(--text);font-family:'Inter
 .em-row{display:flex;gap:10px}
 .em-row .em-field{flex:1}
 select.ap-input option{background:var(--bg2);color:var(--text)}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN PANEL — fix flex collapse / overlap glitches
+═══════════════════════════════════════════════════════════════ */
+#admin-panel{width:min(720px,92vw);height:min(80vh,720px);max-height:none}
+#admin-panel .ap-body{min-height:0;flex:1 1 auto;overflow-y:auto}
+.ap-tab-panel{min-height:0;gap:10px}
+.ap-tab-panel.active{flex:1 1 auto;min-height:0}
+.ap-tabs{flex-shrink:0;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+.ap-tabs::-webkit-scrollbar{display:none}
+.ap-tab{flex-shrink:0;white-space:nowrap}
+#file-content-editor{flex:0 0 220px;min-height:140px;max-height:280px;height:auto}
+#ap-file-list{max-height:220px;overflow-y:auto;flex-shrink:0}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+═══════════════════════════════════════════════════════════════ */
+@media (max-width:767px){
+  #topbar{padding:0 10px;gap:8px}
+  #topbar .logo{font-size:14px;margin-right:0}
+  #topbar .logo span{display:none}
+  #search-bar{max-width:none;height:32px;padding:0 8px}
+  #search-bar input{font-size:13px}
+  .tb-btn{padding:5px 8px;font-size:12px}
+  .tb-btn .tb-label{display:none}
+  #ws-badge{padding:3px 6px;font-size:11px}
+  #ws-label{display:none}
+  #kpi-strip{padding:8px;gap:6px;display:grid;grid-template-columns:repeat(2,1fr)}
+  .kpi{min-width:0;padding:10px 12px}
+  .kpi .kv{font-size:22px}
+  .kpi .kl{font-size:9px}
+  #map-section{flex:0 0 360px}
+  #map-flex{height:340px}
+  #country-panel{
+    position:fixed;left:0;right:0;bottom:0;height:78vh;width:100%!important;
+    z-index:550;transform:translateY(100%);transition:transform .25s ease;
+    border-top:1px solid var(--border);border-left:none;border-radius:14px 14px 0 0;
+    box-shadow:0 -8px 28px rgba(0,0,0,.55);flex:0 0 auto!important
+  }
+  #country-panel.open{transform:translateY(0)}
+  #country-panel::before{
+    content:'';position:absolute;top:7px;left:50%;transform:translateX(-50%);
+    width:40px;height:4px;background:var(--text3);border-radius:2px;opacity:.6
+  }
+  .cp-hdr{padding-top:18px}
+  #analytics-row{flex-direction:column;min-height:0}
+  .an-panel{min-height:200px}
+  .rh-col{display:none}
+  #admin-panel{width:100vw;height:100vh;max-height:none;border-radius:0}
+  #admin-overlay{align-items:stretch;justify-content:stretch}
+  #event-modal{width:100vw;max-height:100vh;height:100vh;border-radius:0}
+  #event-modal-overlay{align-items:stretch;justify-content:stretch}
+  #events-table-wrap{max-height:none}
+  .ev-table{font-size:11px}
+  .ev-table th,.ev-table td{padding:5px 6px}
+}
+@media (min-width:768px) and (max-width:1023px){
+  #map-section{flex:0 0 440px}
+  #map-flex{height:420px}
+  #country-panel{
+    position:fixed;top:52px;right:0;bottom:0;width:min(440px,55vw);z-index:550;
+    transform:translateX(100%);transition:transform .25s ease;flex:0 0 auto!important
+  }
+  #country-panel.open{transform:translateX(0);width:min(440px,55vw)}
+  #kpi-strip{padding:10px}
+  .kpi{min-width:140px}
+}
+@media (min-width:1024px){
+  #hamburger{display:none}
+  #sidebar-scrim{display:none!important}
+  #country-panel.open{flex:0 0 380px;width:380px}
+}
+@media (min-width:1440px){
+  #country-panel.open{flex:0 0 420px;width:420px}
+}
 </style>
 </head>
 <body data-ws-port="__WS_PORT__">
@@ -391,6 +573,9 @@ select.ap-input option{background:var(--bg2);color:var(--text)}
      ║  TOP BAR                                                 ║
      ╚══════════════════════════════════════════════════════════╝ -->
 <div id="topbar">
+  <button id="hamburger" onclick="toggleSidebar()" aria-label="Menu">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
   <div class="logo">C<span>-Legends</span></div>
 
   <div id="search-bar">
@@ -408,11 +593,11 @@ select.ap-input option{background:var(--bg2);color:var(--text)}
     </div>
     <button class="tb-btn" onclick="openAdmin()" title="Admin">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      Admin
+      <span class="tb-label">Admin</span>
     </button>
     <button class="tb-btn" id="btn-live" onclick="toggleLive()" title="Live Stream">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 7.76a6 6 0 0 0 0 8.49"/><path d="M20.07 4.93a10 10 0 0 1 0 14.14M3.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-      Live
+      <span class="tb-label">Live</span>
     </button>
   </div>
 </div>
@@ -422,8 +607,13 @@ select.ap-input option{background:var(--bg2);color:var(--text)}
      ╚══════════════════════════════════════════════════════════╝ -->
 <div id="app">
 
-  <!-- ── SIDEBAR ── -->
+  <!-- ── SIDEBAR (overlay on <1024px) ── -->
+  <div id="sidebar-scrim" onclick="closeSidebar()"></div>
   <div id="sidebar">
+    <button class="sidebar-back" onclick="closeSidebar()" aria-label="Close menu">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Back
+    </button>
     <div class="sidebar-section">Dashboard</div>
     <div class="nav-item active" onclick="scrollToSection('kpi-section',this)">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -491,41 +681,76 @@ select.ap-input option{background:var(--bg2);color:var(--text)}
 
       <div class="rh-row" data-target="map-section" data-prop="flex-basis"></div>
 
-      <!-- MAP SECTION -->
+      <!-- MAP SECTION (3D Globe + Country intel panel) -->
       <div class="section" id="map-section">
         <div class="section-hdr" onclick="toggleSection('map-section')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-          <span class="s-title">Geo Intelligence Map</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/></svg>
+          <span class="s-title">Geo Intelligence Globe</span>
         </div>
         <div class="section-body" style="padding:0;position:relative">
-          <div id="map-container">
-            <!-- Geo search overlay -->
-            <div id="geo-search">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-              <input id="geo-input" type="text" placeholder="Focus country or city…" autocomplete="off" onkeydown="if(event.key==='Enter')geoFocus()"/>
-              <button onclick="geoFocus()" title="Go">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-              </button>
-              <button onclick="clearFocus()" title="Clear focus">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
+          <div id="map-flex">
+            <div id="globe-wrap">
+              <!-- Geo search overlay -->
+              <div id="geo-search">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input id="geo-input" type="text" placeholder="Focus country…" autocomplete="off" onkeydown="if(event.key==='Enter')geoFocus()"/>
+                <button onclick="geoFocus()" title="Go">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+                <button onclick="clearFocus()" title="Clear focus">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+
+              <canvas id="globe-canvas"></canvas>
+
+              <div id="map-controls">
+                <button class="map-btn" id="btn-rotate" onclick="toggleAutoRotate()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Auto-rotate
+                </button>
+                <button class="map-btn" onclick="resetMapZoom()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                  Reset View
+                </button>
+              </div>
+
+              <div id="focus-label">Focus: <span id="focus-name"></span></div>
             </div>
 
-            <div id="map-chart"></div>
-
-            <!-- Map controls -->
-            <div id="map-controls">
-              <button class="map-btn" id="btn-focus-mode" onclick="toggleFocusMode()">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                Focus Mode
-              </button>
-              <button class="map-btn" onclick="resetMapZoom()">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                Reset View
-              </button>
-            </div>
-
-            <div id="focus-label">Focus: <span id="focus-name"></span></div>
+            <!-- Country intel side panel -->
+            <aside id="country-panel" aria-hidden="true">
+              <div class="cp-hdr">
+                <button class="cp-back" onclick="closeCountryPanel()" aria-label="Back">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  Back
+                </button>
+                <h3 id="cp-name">—</h3>
+              </div>
+              <div class="cp-body">
+                <div class="cp-section">
+                  <div class="cp-section-title">Stats for this country</div>
+                  <div class="cp-stat-grid" id="cp-stat-grid">
+                    <div class="cp-stat"><div class="v" id="cp-total">0</div><div class="l">Events</div></div>
+                    <div class="cp-stat"><div class="v" id="cp-errors">0</div><div class="l">Errors</div></div>
+                    <div class="cp-stat"><div class="v" id="cp-warns">0</div><div class="l">Warnings</div></div>
+                    <div class="cp-stat"><div class="v" id="cp-logins">0</div><div class="l">Logins</div></div>
+                  </div>
+                </div>
+                <div class="cp-section">
+                  <div class="cp-section-title">AI Threat Summary</div>
+                  <div class="cp-summary loading" id="cp-summary">Awaiting analysis…</div>
+                </div>
+                <div class="cp-section" id="cp-chat">
+                  <div class="cp-section-title">Ask the Analyst</div>
+                  <div id="cp-chat-log"></div>
+                  <form id="cp-chat-form" onsubmit="cpSendChat(event)">
+                    <input id="cp-chat-input" type="text" placeholder="Ask about these logs only…" autocomplete="off"/>
+                    <button id="cp-chat-send" type="submit">Send</button>
+                  </form>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -757,9 +982,13 @@ select.ap-input option{background:var(--bg2);color:var(--text)}
 <div id="admin-overlay" onclick="if(event.target===this)closeAdmin()">
   <div id="admin-panel">
     <div class="ap-hdr">
+      <button class="cp-back" onclick="closeAdmin()" aria-label="Back" style="margin-right:4px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back
+      </button>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       <h2>Admin Control Panel</h2>
-      <button class="ap-close" onclick="closeAdmin()">
+      <button class="ap-close" onclick="closeAdmin()" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
@@ -774,65 +1003,41 @@ select.ap-input option{background:var(--bg2);color:var(--text)}
 'use strict';
 
 /* ════════════════════════════════════════════════════════════
-   DEMO / OFFLINE DATA
+   WS PORT — injected by server, fallback queried via /api/config
 ════════════════════════════════════════════════════════════ */
-const DEMO_EVENTS = [
-  {id:1,timestamp:'2024-01-15 10:23:41',type:'Error',ip:'203.45.67.89',country:'China',city:'Beijing',message:'Authentication failed: invalid credentials'},
-  {id:2,timestamp:'2024-01-15 10:24:12',type:'Warning',ip:'185.220.101.4',country:'Russia',city:'Moscow',message:'Rate limit exceeded: 200 req/min'},
-  {id:3,timestamp:'2024-01-15 10:24:55',type:'Info',ip:'8.8.8.8',country:'United States',city:'Mountain View',message:'DNS lookup completed successfully'},
-  {id:4,timestamp:'2024-01-15 10:25:03',type:'Error',ip:'203.45.67.89',country:'Japan',city:'Tokyo',message:'SQL injection attempt blocked'},
-  {id:5,timestamp:'2024-01-15 10:25:44',type:'Warning',ip:'91.108.4.5',country:'Germany',city:'Frankfurt',message:'Suspicious user-agent detected'},
-  {id:6,timestamp:'2024-01-15 10:26:01',type:'Info',ip:'1.1.1.1',country:'Australia',city:'Sydney',message:'CDN cache hit: static assets served'},
-  {id:7,timestamp:'2024-01-15 10:26:38',type:'Error',ip:'45.33.32.156',country:'United States',city:'Fremont',message:'Port scan detected from external host'},
-  {id:8,timestamp:'2024-01-15 10:27:12',type:'Debug',ip:'192.168.1.1',country:'',city:'',message:'Internal health check passed'},
-  {id:9,timestamp:'2024-01-15 10:27:55',type:'Error',ip:'185.220.101.4',country:'United States',city:'New York',message:'Impossible travel detected: Russia→USA in 1h'},
-  {id:10,timestamp:'2024-01-15 10:28:33',type:'Warning',ip:'103.21.244.0',country:'Brazil',city:'São Paulo',message:'Failed login attempt #5 for user admin'},
-];
-const DEMO_STATS = {
-  total:1247,errors:234,warnings:389,logins:342,activities:282,
-  countries:[
-    {name:'United States',count:312},{name:'China',count:201},{name:'Russia',count:187},
-    {name:'Germany',count:98},{name:'Brazil',count:76},{name:'Japan',count:65},
-    {name:'Australia',count:54},{name:'India',count:42},{name:'France',count:31}
-  ],
-  timeline:[
-    {hour:'00:00',count:45},{hour:'02:00',count:32},{hour:'04:00',count:28},
-    {hour:'06:00',count:67},{hour:'08:00',count:134},{hour:'10:00',count:189},
-    {hour:'12:00',count:156},{hour:'14:00',count:143},{hour:'16:00',count:167},
-    {hour:'18:00',count:112},{hour:'20:00',count:89},{hour:'22:00',count:85}
-  ]
-};
-const DEMO_RISK = [
-  {ip:'203.45.67.89',riskScore:85,count:12,countries:['China','Japan'],cities:['Beijing','Tokyo']},
-  {ip:'185.220.101.4',riskScore:75,count:8,countries:['Russia','United States'],cities:['Moscow','New York']},
-  {ip:'45.33.32.156',riskScore:40,count:5,countries:['United States','Canada'],cities:['Fremont','Toronto']},
-];
-
-const DEFAULT_WS_PORT = 9090;
-const wsPortValue = document.body.dataset.wsPort;
-const WS_PORT = (wsPortValue && wsPortValue !== '__WS_PORT__' && !Number.isNaN(Number(wsPortValue)))
+const wsPortValue = (document.body && document.body.dataset && document.body.dataset.wsPort) || '';
+const WS_PORT_FROM_TEMPLATE = (wsPortValue && wsPortValue !== '__WS_PORT__' && !Number.isNaN(Number(wsPortValue)))
   ? Number(wsPortValue)
-  : DEFAULT_WS_PORT;
+  : null;
 
 /* ════════════════════════════════════════════════════════════
    STATE
 ════════════════════════════════════════════════════════════ */
-let mapChart = null, rpMapChart = null, timelineChart = null, pieChart = null;
+let timelineChart = null, pieChart = null;
 let ws = null, wsLive = false;
 let authToken = null, userRole = 'user';
-let focusMode = false, focusCountry = '';
+let focusCountry = '';
 let riskByIP = {};        // ip → {riskScore, countries, cities}
 let evPage = 1, evTotal = 0;
 let rpPage = 1, rpTotal = 0, rpQuery = '';
 let streamCount = 0;
-let worldMapLoaded = false;
-let mapCountries = DEMO_STATS.countries;
+let mapCountries = [];
+let cpCurrentCountry = null;
+let cpChatBusy = false;
+let WS_PORT_RUNTIME = null;
+
+/** WebSocket bind is IPv4-only; "localhost" often resolves to ::1 first → WS fails. */
+function wsConnectHost() {
+  const h = location.hostname;
+  if (h === 'localhost' || h === '::1') return '127.0.0.1';
+  return h;
+}
 
 /* ════════════════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════════════════ */
 function init() {
-  loadWorldMap();
+  initGlobe();
   loadStats();
   loadEvents();
   loadRisk();
@@ -852,112 +1057,20 @@ function init() {
     const d = btn.dataset;
     openEditEventModal(d.id, d.type, d.ts, d.user, d.ip, d.desc, d.x1, d.x2);
   });
-}
 
-/* ════════════════════════════════════════════════════════════
-   WORLD MAP LOADING
-════════════════════════════════════════════════════════════ */
-function loadWorldMap() {
-  const s = document.createElement('script');
-  s.src = 'js/world.js';
-  s.onload = () => { worldMapLoaded = true; initMapChart(); };
-  s.onerror = () => { console.warn('world.js not found — map running without geo data'); initMapChart(); };
-  document.head.appendChild(s);
-}
-
-/* ════════════════════════════════════════════════════════════
-   MAP CHART
-════════════════════════════════════════════════════════════ */
-function initMapChart() {
-  const el = document.getElementById('map-chart');
-  mapChart = echarts.init(el, 'dark');
-  renderMap(mapChart, mapCountries);
-  window.addEventListener('resize', () => mapChart && mapChart.resize());
-
-  mapChart.on('click', params => {
-    if (params.componentType === 'geo' && params.name) {
-      focusCountry = params.name;
-      focusMode = true;
-      document.getElementById('btn-focus-mode').classList.add('on');
-      document.getElementById('focus-label').style.display = 'block';
-      document.getElementById('focus-name').textContent = params.name;
-      renderMap(mapChart, mapCountries);
+  window.addEventListener('resize', () => { if (window.Globe) Globe.resize(); });
+  // Close country panel on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('country-panel')?.classList.contains('open')) closeCountryPanel();
+      else if (document.getElementById('sidebar')?.classList.contains('open')) closeSidebar();
     }
   });
 }
 
-function renderMap(chart, countryData) {
-  if (!chart) return;
-  const maxCount = Math.max(...countryData.map(c => c.count), 1);
-  const scatterData = countryData.map(c => {
-    const coords = COUNTRY_COORDS[c.name];
-    if (!coords) return null;
-    const risk = getRiskForCountry(c.name);
-    return {
-      name: c.name,
-      value: [...coords, c.count],
-      itemStyle: {
-        color: risk ? `rgba(239,68,68,${0.6 + risk/200})` : 'rgba(79,142,247,0.7)',
-        opacity: focusMode && focusCountry && c.name !== focusCountry ? 0.15 : 1
-      }
-    };
-  }).filter(Boolean);
-
-  // Build regions for focus mode
-  const regions = [];
-  if (focusMode && focusCountry) {
-    regions.push({
-      name: focusCountry,
-      itemStyle: { areaColor: 'rgba(79,142,247,0.25)', borderColor: '#4f8ef7', borderWidth: 2 },
-      emphasis: { itemStyle: { areaColor: 'rgba(79,142,247,0.4)' } }
-    });
-  }
-
-  chart.setOption({
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'item',
-      formatter: p => {
-        if (p.componentType !== 'series') return p.name;
-        const cnt = p.value[2] || 0;
-        const risk = riskByIP;
-        // Find IPs for this country
-        const flagged = Object.entries(riskByIP)
-          .filter(([,v]) => v.countries && v.countries.includes(p.name));
-        let extra = '';
-        if (flagged.length) extra = `<br><span style="color:#ef4444">⚠ ${flagged.length} flagged IP(s)</span>`;
-        return `<b>${p.name}</b><br>Events: ${cnt}${extra}`;
-      }
-    },
-    geo: {
-      map: 'world',
-      roam: true,
-      silent: false,
-      regions,
-      itemStyle: {
-        areaColor: focusMode ? '#1a1e35' : '#1a2040',
-        borderColor: '#2a3060',
-        borderWidth: 0.5
-      },
-      emphasis: {
-        itemStyle: { areaColor: focusMode ? '#1a1e35' : '#2a3070' },
-        label: { show: true, color: '#e2e8f0', fontSize: 11 }
-      },
-      label: { show: false }
-    },
-    series: [{
-      type: 'effectScatter',
-      coordinateSystem: 'geo',
-      data: scatterData,
-      symbolSize: d => Math.max(6, Math.min(28, (d[2] / maxCount) * 28)),
-      showEffectOn: 'render',
-      rippleEffect: { brushType: 'stroke', scale: 2.5, period: 3 },
-      encode: { tooltip: 2 },
-      tooltip: { show: true }
-    }]
-  }, true);
-}
-
+/* ════════════════════════════════════════════════════════════
+   GLOBE (Three.js)
+════════════════════════════════════════════════════════════ */
 function getRiskForCountry(country) {
   for (const [, v] of Object.entries(riskByIP)) {
     if (v.countries && v.countries.includes(country)) return v.riskScore;
@@ -965,54 +1078,53 @@ function getRiskForCountry(country) {
   return 0;
 }
 
-function toggleFocusMode() {
-  focusMode = !focusMode;
-  const btn = document.getElementById('btn-focus-mode');
-  if (focusMode) {
-    btn.classList.add('on');
-    if (!focusCountry && mapCountries.length) {
-      focusCountry = mapCountries[0].name;
-    }
-    document.getElementById('focus-label').style.display = focusCountry ? 'block' : 'none';
-    document.getElementById('focus-name').textContent = focusCountry;
-  } else {
-    btn.classList.remove('on');
-    focusCountry = '';
-    document.getElementById('focus-label').style.display = 'none';
+function initGlobe() {
+  const canvas = document.getElementById('globe-canvas');
+  if (!canvas || !window.Globe) {
+    console.warn('Globe module not ready');
+    return;
   }
-  renderMap(mapChart, mapCountries);
+  Globe.init(canvas, {
+    onCountryClick: name => openCountryPanel(name),
+    getRiskForCountry
+  });
+  Globe.setCountryData(mapCountries);
+}
+
+function toggleAutoRotate() {
+  if (!window.Globe) return;
+  const on = Globe.toggleAutoRotate();
+  document.getElementById('btn-rotate').classList.toggle('on', on);
 }
 
 function geoFocus() {
   const val = document.getElementById('geo-input').value.trim();
   if (!val) return;
-  focusCountry = val;
-  focusMode = true;
-  document.getElementById('btn-focus-mode').classList.add('on');
-  document.getElementById('focus-label').style.display = 'block';
-  document.getElementById('focus-name').textContent = val;
-  renderMap(mapChart, mapCountries);
-  // Try to zoom to the country
-  if (mapChart) {
-    const coords = COUNTRY_COORDS[val];
-    if (coords) {
-      mapChart.setOption({ geo: { center: coords, zoom: 4 } });
-    }
+  // Match centroid case-insensitively
+  const centroids = window.COUNTRY_CENTROIDS || {};
+  const match = Object.keys(centroids).find(k => k.toLowerCase() === val.toLowerCase());
+  if (!match) {
+    document.getElementById('focus-label').style.display = 'block';
+    document.getElementById('focus-name').textContent = `Unknown: ${val}`;
+    return;
   }
+  Globe.focusCountry(match);
+  focusCountry = match;
+  document.getElementById('focus-label').style.display = 'block';
+  document.getElementById('focus-name').textContent = match;
+  openCountryPanel(match);
 }
 
 function clearFocus() {
-  focusMode = false;
   focusCountry = '';
   document.getElementById('geo-input').value = '';
-  document.getElementById('btn-focus-mode').classList.remove('on');
   document.getElementById('focus-label').style.display = 'none';
-  renderMap(mapChart, mapCountries);
-  resetMapZoom();
+  if (window.Globe) Globe.clearFocus();
+  closeCountryPanel();
 }
 
 function resetMapZoom() {
-  if (mapChart) mapChart.setOption({ geo: { center: null, zoom: 1.2, roam: true } });
+  if (window.Globe) Globe.clearFocus();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1021,35 +1133,48 @@ function resetMapZoom() {
 function initCharts() {
   const tlEl = document.getElementById('chart-timeline');
   const piEl = document.getElementById('chart-pie');
-  timelineChart = echarts.init(tlEl, 'dark');
-  pieChart = echarts.init(piEl, 'dark');
-  window.addEventListener('resize', () => { timelineChart && timelineChart.resize(); pieChart && pieChart.resize(); });
-  renderTimelineChart(DEMO_STATS.timeline);
-  renderPieChart(DEMO_STATS);
-  renderCountryList(DEMO_STATS.countries);
+  if (!tlEl || !piEl) {
+    console.error('[C-Legends] Chart containers missing — skipping echarts init.');
+    return;
+  }
+  if (typeof echarts === 'undefined') {
+    console.error('[C-Legends] echarts failed to load (CDN blocked?) — KPI/data still work.');
+    return;
+  }
+  try {
+    timelineChart = echarts.init(tlEl, 'dark');
+    pieChart = echarts.init(piEl, 'dark');
+    window.addEventListener('resize', () => { timelineChart && timelineChart.resize(); pieChart && pieChart.resize(); });
+    renderTimelineChart([]);
+    renderPieChart({ errors: 0, warnings: 0, logins: 0, activities: 0 });
+    renderCountryList([]);
+  } catch (e) {
+    console.error('[C-Legends] initCharts failed:', e);
+  }
 }
 
 function renderTimelineChart(tl) {
   if (!timelineChart) return;
+  // tl items have .day (ISO YYYY-MM-DD) or legacy .hour. Use whichever is present.
+  const labels = tl.map(t => t.day || t.hour || '');
   timelineChart.setOption({
     backgroundColor: 'transparent',
-    grid: { top:20, right:10, bottom:24, left:36 },
+    grid: { top:20, right:10, bottom:30, left:36 },
     tooltip: { trigger:'axis', backgroundColor:'#13162a', borderColor:'#2a2f4a', textStyle:{color:'#e2e8f0'} },
-    xAxis: { type:'category', data: tl.map(t=>t.hour), axisLabel:{color:'#64748b',fontSize:10}, axisLine:{lineStyle:{color:'#2a2f4a'}} },
+    xAxis: { type:'category', data: labels, axisLabel:{color:'#64748b',fontSize:10,rotate:labels.length>8?30:0}, axisLine:{lineStyle:{color:'#2a2f4a'}} },
     yAxis: { type:'value', axisLabel:{color:'#64748b',fontSize:10}, splitLine:{lineStyle:{color:'#1a1e35'}} },
     series: [{
       type:'bar', data: tl.map(t=>t.count),
       itemStyle:{color:'rgba(79,142,247,0.7)', borderRadius:[3,3,0,0]},
       emphasis:{itemStyle:{color:'#4f8ef7'}}
     }]
-  });
+  }, true);
 }
 
 function renderPieChart(s) {
   if (!pieChart) return;
-  // Backward compatibility: older demo stats used info/debug fields.
-  const logins = s.logins ?? s.info ?? 0;
-  const activities = s.activities ?? s.debug ?? 0;
+  const logins = s.logins ?? 0;
+  const activities = s.activities ?? 0;
   pieChart.setOption({
     backgroundColor: 'transparent',
     tooltip: { trigger:'item', backgroundColor:'#13162a', borderColor:'#2a2f4a', textStyle:{color:'#e2e8f0'} },
@@ -1088,34 +1213,46 @@ function renderCountryList(countries) {
    KPI STATS
 ════════════════════════════════════════════════════════════ */
 function loadStats() {
-  fetch('/api/stats', buildHeaders())
-    .then(r => r.json())
+  fetch('/api/stats', { headers: buildHeaders(), cache: 'no-store' })
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(applyStats)
-    .catch(() => applyStats(DEMO_STATS));
+    .catch((err) => {
+      console.error('[C-Legends] /api/stats failed — open this app via the running server (e.g. http://127.0.0.1:8080), not a file:// URL or another port.', err);
+      applyStats({ total:0, errors:0, warnings:0, logins:0, activities:0,
+                   countries:[], processes:[], timeline:[] });
+    });
 }
 
 function applyStats(s) {
-  document.getElementById('kpi-total').textContent = fmt(s.total);
-  document.getElementById('kpi-errors').textContent = fmt(s.errors);
-  document.getElementById('kpi-warn').textContent = fmt(s.warnings);
+  const setKpi = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el) {
+      console.error('[C-Legends] Missing #' + id + ' — init may have run before DOM (check bootstrapping).');
+      return false;
+    }
+    el.textContent = fmt(val);
+    return true;
+  };
+  setKpi('kpi-total', s.total);
+  setKpi('kpi-errors', s.errors);
+  setKpi('kpi-warn', s.warnings);
 
-  // Countries: array [{name,count}] from real API, or empty → fall back to processes
   const hasCountries = Array.isArray(s.countries) && s.countries.length > 0;
+  const procArr = Array.isArray(s.processes) ? s.processes : [];
   const listData = hasCountries ? s.countries
-                  : (s.processes || []).map(p => ({name: p.name, count: p.count}));
+                  : procArr.map(p => ({ name: p.name, count: p.count }));
 
   mapCountries = hasCountries ? s.countries : [];
-  document.getElementById('kpi-countries').textContent = mapCountries.length;
+  {
+    const el = document.getElementById('kpi-countries');
+    if (el) el.textContent = mapCountries.length;
+  }
 
-  // Update the "Top Countries" panel header to reflect actual data
   const panelHdr = document.querySelector('#panel-country .an-hdr');
   if (panelHdr) panelHdr.textContent = hasCountries ? 'Top Countries' : 'Top Processes';
 
   if (!hasCountries) {
-    focusMode = false;
     focusCountry = '';
-    const btn = document.getElementById('btn-focus-mode');
-    if (btn) btn.classList.remove('on');
     const focusLabel = document.getElementById('focus-label');
     if (focusLabel) focusLabel.style.display = 'none';
     const focusInput = document.getElementById('geo-input');
@@ -1123,10 +1260,9 @@ function applyStats(s) {
   }
 
   renderCountryList(listData);
-  renderMap(mapChart, mapCountries);
-  if (rpMapChart) renderMap(rpMapChart, mapCountries);
+  if (window.Globe) Globe.setCountryData(mapCountries);
 
-  if (s.timeline) renderTimelineChart(s.timeline);
+  renderTimelineChart(Array.isArray(s.timeline) ? s.timeline : []);
   renderPieChart(s);
 }
 
@@ -1140,9 +1276,12 @@ function fmt(n) {
 ════════════════════════════════════════════════════════════ */
 function loadRisk() {
   fetch('/api/risk', buildHeaders())
-    .then(r => r.json())
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(applyRisk)
-    .catch(() => applyRisk({ flagged: DEMO_RISK }));
+    .catch((err) => {
+      console.error('[C-Legends] /api/risk failed.', err);
+      applyRisk({ flagged: [] });
+    });
 }
 
 function applyRisk(data) {
@@ -1192,10 +1331,11 @@ function loadEvents() {
       document.getElementById('ev-prev').disabled = evPage <= 1;
       document.getElementById('ev-next').disabled = evPage >= pages;
     })
-    .catch(() => {
-      renderEventRows(document.getElementById('ev-tbody'), DEMO_EVENTS);
-      document.getElementById('ev-count').textContent = DEMO_EVENTS.length;
-      document.getElementById('ev-pager-info').textContent = 'Page 1 / 1';
+    .catch((err) => {
+      console.error('[C-Legends] /api/events failed.', err);
+      renderEventRows(document.getElementById('ev-tbody'), []);
+      document.getElementById('ev-count').textContent = 0;
+      document.getElementById('ev-pager-info').textContent = 'Server offline';
       document.getElementById('ev-prev').disabled = true;
       document.getElementById('ev-next').disabled = true;
     });
@@ -1233,11 +1373,23 @@ function renderEventRows(tbody, events) {
 /* ════════════════════════════════════════════════════════════
    LIVE STREAM
 ════════════════════════════════════════════════════════════ */
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const host = location.hostname || 'localhost';
+async function resolveWsPort() {
+  if (WS_PORT_RUNTIME) return WS_PORT_RUNTIME;
+  if (WS_PORT_FROM_TEMPLATE) { WS_PORT_RUNTIME = WS_PORT_FROM_TEMPLATE; return WS_PORT_RUNTIME; }
   try {
-    ws = new WebSocket(`${proto}://${host}:${WS_PORT}`);
+    const cfg = await fetch('/api/config').then(r => r.ok ? r.json() : null);
+    if (cfg && cfg.wsPort) { WS_PORT_RUNTIME = cfg.wsPort; return WS_PORT_RUNTIME; }
+  } catch(_) {}
+  return null;
+}
+
+async function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const host = wsConnectHost();
+  const port = await resolveWsPort();
+  if (!port) { setLiveStatus(false); setTimeout(connectWS, 6000); return; }
+  try {
+    ws = new WebSocket(`${proto}://${host}:${port}`);
     ws.onopen = () => setLiveStatus(true);
     ws.onclose = () => { setLiveStatus(false); setTimeout(connectWS, 4000); };
     ws.onerror = () => setLiveStatus(false);
@@ -1306,17 +1458,11 @@ function openResults() {
   const rp = document.getElementById('results-page');
   rp.classList.add('open');
   document.getElementById('rp-query-label').textContent = `"${rpQuery}"`;
-  if (!rpMapChart) {
-    rpMapChart = echarts.init(document.getElementById('rp-map'), 'dark');
-    renderMap(rpMapChart, mapCountries);
-    window.addEventListener('resize', () => rpMapChart && rpMapChart.resize());
-  }
-  setTimeout(() => rpMapChart && rpMapChart.resize(), 50);
 }
 
 function closeResults() {
   document.getElementById('results-page').classList.remove('open');
-  setTimeout(() => mapChart && mapChart.resize(), 50);
+  setTimeout(() => { if (window.Globe) Globe.resize(); }, 50);
 }
 
 function fetchRPPage(page) {
@@ -1358,21 +1504,13 @@ function fetchRPPage(page) {
       document.getElementById('rp-pager-info').textContent = `Page ${rpPage} / ${pages}`;
       document.getElementById('rp-prev').disabled = rpPage <= 1;
       document.getElementById('rp-next').disabled = rpPage >= pages;
-
-      if (rpMapChart) renderMap(rpMapChart, sorted.map(([name,count])=>({name,count})));
     })
     .catch(() => {
-      // Demo fallback: filter DEMO_EVENTS
-      const filtered = DEMO_EVENTS.filter(e =>
-        e.message.toLowerCase().includes(rpQuery.toLowerCase()) ||
-        (e.ip||'').includes(rpQuery) ||
-        (e.country||'').toLowerCase().includes(rpQuery.toLowerCase())
-      );
-      rpTotal = filtered.length;
-      document.getElementById('rp-result-count').textContent = `${rpTotal} result${rpTotal!==1?'s':''}`;
-      document.getElementById('rp-total').textContent = rpTotal;
-      renderEventRows(document.getElementById('rp-tbody'), filtered);
-      document.getElementById('rp-pager-info').textContent = 'Page 1 / 1';
+      rpTotal = 0;
+      document.getElementById('rp-result-count').textContent = 'Server offline';
+      document.getElementById('rp-total').textContent = 0;
+      renderEventRows(document.getElementById('rp-tbody'), []);
+      document.getElementById('rp-pager-info').textContent = '—';
       document.getElementById('rp-prev').disabled = true;
       document.getElementById('rp-next').disabled = true;
     });
@@ -1774,7 +1912,7 @@ function initResizeHandles() {
       h.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      if (mapChart) mapChart.resize();
+      if (window.Globe) Globe.resize();
       if (timelineChart) timelineChart.resize();
       if (pieChart) pieChart.resize();
     }
@@ -1832,7 +1970,7 @@ function initResizeHandles() {
       rpVdiv.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      if (rpMapChart) rpMapChart.resize();
+      if (window.Globe) Globe.resize();
     }
   }
 
@@ -1858,7 +1996,7 @@ function initResizeHandles() {
       rpRowdiv.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      if (rpMapChart) rpMapChart.resize();
+      if (window.Globe) Globe.resize();
     }
   }
 }
@@ -1879,35 +2017,152 @@ function scrollToSection(id, navEl) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (navEl) navEl.classList.add('active');
+  if (window.innerWidth < 1024) closeSidebar();
 }
 
 /* ════════════════════════════════════════════════════════════
-   COUNTRY COORDINATES (approximate centroids)
+   SIDEBAR OVERLAY
 ════════════════════════════════════════════════════════════ */
-const COUNTRY_COORDS = {
-  'United States':[-98,38],'China':[104,35],'Russia':[90,60],'Germany':[10,51],
-  'Brazil':[-55,-10],'Japan':[138,36],'Australia':[134,-25],'India':[78,20],
-  'France':[2,46],'United Kingdom':[-2,54],'Canada':[-96,56],'Mexico':[-102,24],
-  'South Korea':[127,37],'Italy':[12,42],'Spain':[-3,40],'Netherlands':[5,52],
-  'Sweden':[18,62],'Norway':[10,62],'Denmark':[10,56],'Finland':[26,64],
-  'Poland':[20,52],'Ukraine':[31,49],'Turkey':[35,39],'Iran':[53,32],
-  'Saudi Arabia':[45,25],'Egypt':[30,26],'South Africa':[25,-29],
-  'Nigeria':[8,10],'Kenya':[38,-1],'Argentina':[-64,-34],'Chile':[-71,-30],
-  'Colombia':[-74,4],'Peru':[-76,-10],'Venezuela':[-66,8],
-  'Indonesia':[118,-2],'Malaysia':[112,2],'Thailand':[101,15],
-  'Vietnam':[108,14],'Philippines':[122,13],'Pakistan':[70,30],
-  'Bangladesh':[90,24],'Myanmar':[96,17],'Singapore':[104,1],
-  'Hong Kong':[114,22],'Taiwan':[121,24],'New Zealand':[174,-41],
-  'Portugal':[-8,40],'Belgium':[4,51],'Switzerland':[8,47],
-  'Austria':[14,47],'Czech Republic':[15,50],'Hungary':[19,47],
-  'Romania':[25,46],'Greece':[22,39],'Israel':[35,31],
-  'United Arab Emirates':[54,24],'Qatar':[51,25],'Kuwait':[48,29],
-};
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const sc = document.getElementById('sidebar-scrim');
+  const open = sb.classList.toggle('open');
+  sc.classList.toggle('on', open);
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-scrim').classList.remove('on');
+}
 
 /* ════════════════════════════════════════════════════════════
-   BOOTSTRAP
+   COUNTRY PANEL  (per-country stats + AI summary + chat)
 ════════════════════════════════════════════════════════════ */
-window.addEventListener('DOMContentLoaded', init);
+function openCountryPanel(name) {
+  const panel = document.getElementById('country-panel');
+  if (!panel) return;
+  cpCurrentCountry = name;
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden', 'false');
+  document.getElementById('cp-name').textContent = name;
+  if (window.Globe) Globe.focusCountry(name);
+  document.getElementById('focus-label').style.display = 'block';
+  document.getElementById('focus-name').textContent = name;
+  loadCountryStats(name);
+  loadCountrySummary(name);
+  document.getElementById('cp-chat-log').innerHTML = '';
+  setTimeout(() => { if (window.Globe) Globe.resize(); }, 280);
+}
+
+function closeCountryPanel() {
+  const panel = document.getElementById('country-panel');
+  if (!panel) return;
+  panel.classList.remove('open');
+  panel.setAttribute('aria-hidden', 'true');
+  cpCurrentCountry = null;
+  if (window.Globe) Globe.clearFocus();
+  document.getElementById('focus-label').style.display = 'none';
+  setTimeout(() => { if (window.Globe) Globe.resize(); }, 280);
+}
+
+function loadCountryStats(name) {
+  fetch(`/api/stats?country=${encodeURIComponent(name)}`, buildHeaders())
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(s => {
+      document.getElementById('cp-total').textContent = fmt(s.total || 0);
+      document.getElementById('cp-errors').textContent = fmt(s.errors || 0);
+      document.getElementById('cp-warns').textContent = fmt(s.warnings || 0);
+      document.getElementById('cp-logins').textContent = fmt(s.logins || 0);
+    })
+    .catch(() => {
+      // Best-effort fallback: pull count from current top-countries cache
+      const c = mapCountries.find(x => x.name === name);
+      document.getElementById('cp-total').textContent = fmt(c?.count || 0);
+      document.getElementById('cp-errors').textContent = '—';
+      document.getElementById('cp-warns').textContent = '—';
+      document.getElementById('cp-logins').textContent = '—';
+    });
+}
+
+function loadCountrySummary(name) {
+  const el = document.getElementById('cp-summary');
+  el.className = 'cp-summary loading';
+  el.textContent = 'Analysing log data…';
+  fetch(`/api/ai/summary?country=${encodeURIComponent(name)}`, buildHeaders())
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(d => {
+      if (d.error) {
+        el.className = 'cp-summary error';
+        el.textContent = d.error;
+      } else {
+        el.className = 'cp-summary';
+        el.textContent = d.summary || '(no summary)';
+      }
+    })
+    .catch(() => {
+      el.className = 'cp-summary error';
+      el.textContent = 'AI summary unavailable (server offline or OPENAI_API_KEY not set).';
+    });
+}
+
+function cpAppendChat(role, text) {
+  const log = document.getElementById('cp-chat-log');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function cpSendChat(ev) {
+  ev.preventDefault();
+  if (cpChatBusy) return;
+  const inp = document.getElementById('cp-chat-input');
+  const q = inp.value.trim();
+  if (!q || !cpCurrentCountry) return;
+  inp.value = '';
+  cpAppendChat('user', q);
+  cpChatBusy = true;
+  document.getElementById('cp-chat-send').disabled = true;
+  fetch('/api/ai/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (authToken || '') },
+    body: JSON.stringify({ country: cpCurrentCountry, question: q })
+  }).then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(d => {
+      if (d.error) cpAppendChat('error', d.error);
+      else if (d.reply && d.reply.startsWith('⚠')) cpAppendChat('warn', d.reply);
+      else cpAppendChat('bot', d.reply || '(empty reply)');
+    })
+    .catch(() => cpAppendChat('error', 'AI offline. Check server / OPENAI_API_KEY.'))
+    .finally(() => {
+      cpChatBusy = false;
+      document.getElementById('cp-chat-send').disabled = false;
+    });
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   BOOTSTRAP — if this script runs after DOMContentLoaded (embedded browsers,
+   late injection), addEventListener alone never fires and the UI stays empty.
+════════════════════════════════════════════════════════════ */
+(function boot() {
+  function runInit() {
+    try {
+      init();
+    } catch (e) {
+      console.error('[C-Legends] Dashboard init crashed:', e);
+      const m = document.createElement('div');
+      m.setAttribute('role', 'alert');
+      m.style.cssText = 'position:fixed;inset:auto 16px 16px 16px;padding:14px;background:#2a1515;color:#fecaca;font:13px system-ui;border:1px solid #991b1b;border-radius:8px;z-index:99999';
+      m.innerHTML = '<strong style="display:block;margin-bottom:6px">C-Legends failed to start JavaScript.</strong>Open DevTools → Console for the error. Common fix: CDN scripts must load (Three.js + OrbitControls). Hard-refresh (Cmd+Shift+R).';
+      (document.body || document.documentElement).appendChild(m);
+    }
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', runInit);
+  else
+    runInit();
+})();
 </script>
 </body>
 </html>

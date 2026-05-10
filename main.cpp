@@ -143,6 +143,11 @@ static int runServe(int argc, char* argv[]) {
     cfg.dashboardDir  = "dashboard";
     cfg.adminPassword = adminPass;
     cfg.logDir        = logDir;
+    if (const char* k = std::getenv("OPENAI_API_KEY"); k && *k) cfg.openaiKey = k;
+    if (const char* m = std::getenv("OPENAI_MODEL");   m && *m) cfg.openaiModel = m;
+    std::cout << "[serve] AI analyst : "
+              << (cfg.openaiKey.empty() ? "DISABLED (set OPENAI_API_KEY to enable)"
+                                        : ("ENABLED, model=" + cfg.openaiModel)) << "\n";
 
     WebDashboardServer dashServer(manager, fileHandler, cfg);
 

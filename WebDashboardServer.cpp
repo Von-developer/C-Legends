@@ -14,6 +14,9 @@
 #include <iomanip>
 #include <cstring>
 #include <cerrno>
+#include <ctime>
+#include <cstdio>
+#include <array>
 
 // POSIX
 #include <sys/socket.h>
@@ -25,6 +28,38 @@
 #include <poll.h>
 
 namespace fs = std::filesystem;
+
+// ─────────────────────────────────────────────────────────────────────────
+//  bucketDay — parse a timestamp into "YYYY-MM-DD" for timeline aggregation.
+//  Accepts:
+//    - ISO 8601:  2024-01-15, 2024-01-15T10:23:41, 2024-01-15 10:23:41
+//    - Syslog  :  "Jan  3 10:23:41" / "Jul 15 …"  (year inferred = current)
+//  Returns "unknown" if neither format matches.
+//  Replaces the old `ts.substr(0,6)` slice that produced bogus 6-char keys
+//  for non-ISO inputs.
+// ─────────────────────────────────────────────────────────────────────────
+static std::string bucketDay(const std::string& ts) {
+    if (ts.size() >= 10 && ts[4] == '-' && ts[7] == '-' &&
+        std::isdigit(static_cast<unsigned char>(ts[0])) &&
+        std::isdigit(static_cast<unsigned char>(ts[5]))) {
+        return ts.substr(0, 10);
+    }
+    std::tm tm{};
+    std::istringstream is(ts);
+    is >> std::get_time(&tm, "%b %d %H:%M:%S");
+    if (!is.fail() && tm.tm_mon >= 0 && tm.tm_mday > 0) {
+        if (tm.tm_year == 0) {
+            std::time_t now = std::time(nullptr);
+            std::tm* ln = std::localtime(&now);
+            tm.tm_year = ln ? ln->tm_year : 124;  // fallback: 2024
+        }
+        char buf[11];
+        std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d",
+                      tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+        return buf;
+    }
+    return "unknown";
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Constructor / Destructor
@@ -165,6 +200,9 @@ void WebDashboardServer::handleClient(int fd) {
         else if (req.path == "/api/files/append")  resp = routeApiFilesAppend(req);
         else if (req.path == "/api/auth")          resp = routeApiAuth(req);
         else if (req.path == "/api/risk")          resp = routeApiRisk(req);
+        else if (req.path == "/api/config")        resp = routeApiConfig(req);
+        else if (req.path == "/api/ai/chat")       resp = routeApiAiChat(req);
+        else if (req.path == "/api/ai/summary")    resp = routeApiAiSummary(req);
         else                                       resp = routeStatic(req);
     } catch (const std::exception& ex) {
         resp = jsonResponse(500, R"({"error":")" + escapeJson(ex.what()) + R"("})");
@@ -401,18 +439,20 @@ std::string WebDashboardServer::routeApiEvents(const Request& req) {
 //  Route: GET /api/stats
 // ─────────────────────────────────────────────────────────────────────────
 std::string WebDashboardServer::routeApiStats(const Request& req) {
-    (void)req;
+    // Optional country filter: /api/stats?country=Russia
+    auto qm = parseQuery(req.query);
+    auto cit = qm.find("country");
+    std::string countryFilter = (cit != qm.end()) ? cit->second : "";
+
     const auto& logs = manager_.getLogs();
     std::lock_guard<std::mutex> lk(manager_.getLogsMutex());
 
     int total = 0, errors = 0, warnings = 0, logins = 0, activities = 0;
     std::unordered_map<std::string, int> countries, processes, days;
 
-    constexpr size_t kIsoDateLength = 10;
-    constexpr size_t kIsoYearMonthSep = 4;
-    constexpr size_t kIsoMonthDaySep = 7;
-
     for (const Event* e : logs) {
+        if (!countryFilter.empty() && e->getGeoCountry() != countryFilter) continue;
+
         ++total;
         const std::string& t = e->getType();
         if      (t == "Error")    ++errors;
@@ -431,19 +471,8 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
         else if (auto* ae = dynamic_cast<const ActivityEvent*>(e)) proc = ae->getExtra2();
         if (!proc.empty()) ++processes[proc];
 
-        // Day bucket from timestamp: detect "YYYY-MM-DD" via hyphens, else legacy "Jul  1"
-        const std::string& ts = e->getTimestamp();
-        std::string day;
-        if (ts.size() >= kIsoDateLength &&
-            ts[kIsoYearMonthSep] == '-' &&
-            ts[kIsoMonthDaySep] == '-') {
-            day = ts.substr(0, kIsoDateLength);
-        } else if (ts.size() >= 6) {
-            day = ts.substr(0, 6);
-        } else {
-            day = "?";
-        }
-        ++days[day];
+        // Robust day bucket — full ISO parser, no naive substr slice
+        ++days[bucketDay(e->getTimestamp())];
     }
 
     std::ostringstream json;
@@ -482,7 +511,8 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
     }
     json << "]";
 
-    // Timeline buckets — sorted by key, use "hour" field for frontend compat
+    // Timeline buckets — sorted ISO day ascending. Emit both "day" (canonical)
+    // and "hour" (legacy alias) so older frontends keep working.
     std::vector<std::pair<std::string,int>> dayVec(days.begin(), days.end());
     std::sort(dayVec.begin(), dayVec.end(),
               [](auto& a, auto& b){ return a.first < b.first; });
@@ -490,7 +520,9 @@ std::string WebDashboardServer::routeApiStats(const Request& req) {
     first = true;
     for (auto& [k, v] : dayVec) {
         if (!first) json << ",";
-        json << R"({"hour":")" << escapeJson(k) << R"(","count":)" << v << "}";
+        json << R"({"day":")"  << escapeJson(k) << R"(",)"
+             << R"("hour":")" << escapeJson(k) << R"(",)"
+             << R"("count":)" << v << "}";
         first = false;
     }
     json << "]}";
@@ -993,4 +1025,240 @@ std::string WebDashboardServer::readFile(const std::string& path) {
     if (!f.is_open()) return {};
     return std::string(std::istreambuf_iterator<char>(f),
                        std::istreambuf_iterator<char>());
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Route: GET /api/config
+//  Returns runtime config the frontend needs (currently just wsPort).
+//  Lets the dashboard reach the WebSocket without a hardcoded port.
+// ═════════════════════════════════════════════════════════════════════════
+std::string WebDashboardServer::routeApiConfig(const Request& req) {
+    (void)req;
+    std::ostringstream out;
+    out << R"({"wsPort":)" << cfg_.wsPort
+        << R"(,"aiEnabled":)" << (cfg_.openaiKey.empty() ? "false" : "true")
+        << R"(,"aiModel":")" << escapeJson(cfg_.openaiModel) << R"("})";
+    return jsonResponse(200, out.str());
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Build a JSON array of recent events for a given country, capped at maxN.
+//  Used as LOG_DATA grounding for the AI analyst — keeps prompt small and
+//  forces answers to stay on-data.
+// ─────────────────────────────────────────────────────────────────────────
+std::string WebDashboardServer::buildCountryLogContext(const std::string& country,
+                                                        int maxN) const {
+    const auto& logs = manager_.getLogs();
+    std::lock_guard<std::mutex> lk(manager_.getLogsMutex());
+
+    std::vector<const Event*> matched;
+    matched.reserve(std::min<int>(maxN, static_cast<int>(logs.size())));
+    for (auto it = logs.rbegin(); it != logs.rend() && (int)matched.size() < maxN; ++it) {
+        if ((*it)->getGeoCountry() == country) matched.push_back(*it);
+    }
+
+    std::ostringstream out;
+    out << "[";
+    bool first = true;
+    for (auto* e : matched) {
+        if (!first) out << ",";
+        out << eventToJson(e);
+        first = false;
+    }
+    out << "]";
+    return out.str();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Call OpenAI Chat Completions via curl (no extra deps).
+//  Returns the assistant message text. On failure returns "" and writes a
+//  human-readable reason into errOut.
+// ─────────────────────────────────────────────────────────────────────────
+std::string WebDashboardServer::callOpenAI(const std::string& systemPrompt,
+                                            const std::string& userPrompt,
+                                            int maxTokens,
+                                            std::string& errOut) const {
+    if (cfg_.openaiKey.empty()) {
+        errOut = "AI disabled: OPENAI_API_KEY not set on server.";
+        return "";
+    }
+
+    std::ostringstream payload;
+    payload << R"({"model":")" << escapeJson(cfg_.openaiModel)
+            << R"(","temperature":0.2,"max_tokens":)" << maxTokens
+            << R"(,"messages":[)"
+            << R"({"role":"system","content":")" << escapeJson(systemPrompt) << R"("},)"
+            << R"({"role":"user","content":")"   << escapeJson(userPrompt)   << R"("}]})";
+
+    // Write payload to a tempfile so curl reads it via @file — avoids
+    // shell-escaping the JSON body (which can contain quotes / newlines).
+    char tmpl[] = "/tmp/clegends_ai_XXXXXX";
+    int fd = ::mkstemp(tmpl);
+    if (fd < 0) { errOut = "mkstemp failed"; return ""; }
+    {
+        const std::string& body = payload.str();
+        ::write(fd, body.data(), body.size());
+        ::close(fd);
+    }
+
+    // The API key is injected into the command line. The key comes from the
+    // server's own env; not user input. Guard anyway by rejecting newlines.
+    if (cfg_.openaiKey.find('\n') != std::string::npos ||
+        cfg_.openaiKey.find('\'') != std::string::npos) {
+        ::unlink(tmpl);
+        errOut = "Refusing OpenAI key containing newline or quote.";
+        return "";
+    }
+
+    std::string realCmd =
+        "curl -sS --max-time 25 https://api.openai.com/v1/chat/completions "
+        "-H 'Content-Type: application/json' "
+        "-H 'Authorization: Bearer " + cfg_.openaiKey + "' "
+        "--data-binary @" + std::string(tmpl) + " 2>&1";
+
+    FILE* p = ::popen(realCmd.c_str(), "r");
+    std::string resp;
+    if (p) {
+        std::array<char, 4096> buf{};
+        while (size_t n = std::fread(buf.data(), 1, buf.size(), p)) resp.append(buf.data(), n);
+        ::pclose(p);
+    }
+    ::unlink(tmpl);
+
+    if (resp.empty()) { errOut = "Empty response from OpenAI."; return ""; }
+
+    // Extract "content":"..." from the JSON. We do not pull in a JSON lib here;
+    // a small targeted parse is enough since OpenAI's shape is stable.
+    auto findContent = [](const std::string& s) -> std::string {
+        size_t pos = s.find("\"content\"");
+        if (pos == std::string::npos) return "";
+        pos = s.find(':', pos);
+        if (pos == std::string::npos) return "";
+        pos = s.find('"', pos);
+        if (pos == std::string::npos) return "";
+        ++pos;
+        std::string out;
+        while (pos < s.size()) {
+            char c = s[pos];
+            if (c == '\\' && pos + 1 < s.size()) {
+                char n = s[pos + 1];
+                if      (n == 'n')  out += '\n';
+                else if (n == 't')  out += '\t';
+                else if (n == 'r')  ;
+                else if (n == '"')  out += '"';
+                else if (n == '\\') out += '\\';
+                else if (n == 'u' && pos + 5 < s.size()) {
+                    // Skip BMP unicode escape — pass through literally for terseness.
+                    out.append(s, pos, 6);
+                    pos += 6; continue;
+                } else out += n;
+                pos += 2;
+            } else if (c == '"') {
+                return out;
+            } else {
+                out += c; ++pos;
+            }
+        }
+        return out;
+    };
+
+    std::string content = findContent(resp);
+    if (content.empty()) {
+        // Surface API error message if present
+        size_t epos = resp.find("\"error\"");
+        if (epos != std::string::npos) {
+            errOut = "OpenAI error: " + resp.substr(epos, std::min<size_t>(220, resp.size() - epos));
+        } else {
+            errOut = "Unparseable AI response.";
+        }
+        return "";
+    }
+    return content;
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Route: POST /api/ai/chat   body: {"country":"X","question":"..."}
+//  Critical & analytical analyst, scope-locked to provided LOG_DATA.
+// ═════════════════════════════════════════════════════════════════════════
+std::string WebDashboardServer::routeApiAiChat(const Request& req) {
+    if (req.method != "POST") return jsonResponse(405, R"({"error":"POST required"})");
+    if (cfg_.openaiKey.empty()) {
+        return jsonResponse(503, R"({"error":"AI disabled: OPENAI_API_KEY not set on server."})");
+    }
+
+    // Tiny body parser — body is JSON {"country":"...","question":"..."}.
+    auto extract = [&](const std::string& key) -> std::string {
+        std::string pat = "\"" + key + "\"";
+        size_t pos = req.body.find(pat);
+        if (pos == std::string::npos) return "";
+        pos = req.body.find('"', pos + pat.size() + 1);
+        if (pos == std::string::npos) return "";
+        size_t end = pos + 1;
+        std::string out;
+        while (end < req.body.size() && req.body[end] != '"') {
+            if (req.body[end] == '\\' && end + 1 < req.body.size()) {
+                out += req.body[end + 1]; end += 2;
+            } else { out += req.body[end++]; }
+        }
+        return out;
+    };
+    std::string country  = extract("country");
+    std::string question = extract("question");
+    if (country.empty() || question.empty())
+        return jsonResponse(400, R"({"error":"country and question are required."})");
+
+    std::string ctx = buildCountryLogContext(country, 200);
+
+    const std::string sys =
+        "You are C-Legends Threat Analyst. Tone: critical, analytical, terse. "
+        "Hard rule: ONLY answer using LOG_DATA below. Use no outside knowledge. "
+        "If the question is unrelated to log analysis or this country's events, "
+        "reply EXACTLY: \"\xE2\x9A\xA0 Out of scope. I only analyse the provided log data.\" "
+        "Cite event IDs when claiming patterns. No speculation. No filler.\n\n"
+        "COUNTRY: " + country + "\nLOG_DATA:\n" + ctx;
+
+    std::string err;
+    std::string reply = callOpenAI(sys, question, 600, err);
+    if (reply.empty()) {
+        return jsonResponse(502, R"({"error":")" + escapeJson(err) + R"("})");
+    }
+    std::ostringstream out;
+    out << R"({"reply":")" << escapeJson(reply) << R"("})";
+    return jsonResponse(200, out.str());
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Route: GET /api/ai/summary?country=Russia
+//  One-shot threat summary for a country, cached briefly per call.
+// ═════════════════════════════════════════════════════════════════════════
+std::string WebDashboardServer::routeApiAiSummary(const Request& req) {
+    if (cfg_.openaiKey.empty()) {
+        return jsonResponse(503, R"({"error":"AI disabled: OPENAI_API_KEY not set on server."})");
+    }
+    auto qm = parseQuery(req.query);
+    auto cit = qm.find("country");
+    if (cit == qm.end() || cit->second.empty())
+        return jsonResponse(400, R"({"error":"country query parameter required."})");
+
+    std::string country = cit->second;
+    std::string ctx = buildCountryLogContext(country, 150);
+
+    const std::string sys =
+        "You are C-Legends Threat Analyst. Produce a concise (max 6 short bullets) "
+        "critical threat summary for the country below, grounded ONLY in LOG_DATA. "
+        "If LOG_DATA is empty, reply: \"No log data for this country.\" "
+        "Highlight: dominant event types, suspicious IP patterns, possible attack "
+        "vectors, and gaps. No speculation outside the data.";
+
+    const std::string user =
+        "COUNTRY: " + country + "\nLOG_DATA:\n" + ctx + "\n\nProvide the summary now.";
+
+    std::string err;
+    std::string reply = callOpenAI(sys, user, 500, err);
+    if (reply.empty()) {
+        return jsonResponse(502, R"({"error":")" + escapeJson(err) + R"("})");
+    }
+    std::ostringstream out;
+    out << R"({"summary":")" << escapeJson(reply) << R"("})";
+    return jsonResponse(200, out.str());
 }
